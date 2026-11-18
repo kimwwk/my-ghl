@@ -1,6 +1,7 @@
 import { business, getSettings } from "./settings";
 import { ApiError, appendSend, patchRaw, requireInvoice } from "./invoices";
 import { LOGO_CID, deliver, transportReady } from "./email";
+import { invoicePdf } from "./pdf-service";
 import { emailSubject, renderInvoiceEmail } from "./email-html";
 import { createPaymentLink, deactivatePaymentLink, markPaidRow, stripeConfigured, syncInvoiceFromStripe } from "./stripe";
 import type { Invoice, PaidMethod } from "./types";
@@ -75,7 +76,9 @@ export async function sendInvoice(id: string, opts: { to?: unknown; cc?: unknown
   const { html, text } = renderFor(cur, `cid:${LOGO_CID}`);
   let res;
   try {
+    const pdf = await invoicePdf(cur.id);
     res = await deliver({
+      pdf: { filename: `${pdf.number}.pdf`, content: pdf.buf },
       to,
       cc,
       subject: emailSubject(cur, business()),

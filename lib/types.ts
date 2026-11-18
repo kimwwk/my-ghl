@@ -65,6 +65,9 @@ export interface BusinessProfile {
   tax_number: string;
   etransfer_email: string;
   etransfer_text: string;
+  website: string;
+  sender_name: string;
+  accent_color: string;
 }
 
 export function lineAmountCents(it: LineItem): number {
@@ -125,4 +128,21 @@ export function addDaysISO(iso: string, days: number): string {
 
 export function padNumber(prefix: string, n: number): string {
   return `${prefix}${String(n).padStart(4, "0")}`;
+}
+
+/** GHL-style money: CAD -> "CA$1,695.00", USD -> "$2,420.00". */
+export function formatMoneyGhl(cents: number, currency: Currency): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+}
+
+/** "2026-11-18" -> "November 18, 2026" */
+export function formatLongDate(d: string): string {
+  const [y, m, day] = d.split("-").map(Number);
+  if (!y || !m || !day) return d;
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }

@@ -4,7 +4,7 @@ Local, single-user invoicing. Create an invoice, email it to a client with Inter
 instructions and an optional "Pay by card" Stripe Payment Link. Kim uses the web UI; her AI agent
 uses the REST API ([AGENT_API.md](AGENT_API.md)).
 
-The email **is** the invoice: the full invoice is inline HTML, so the client never needs to reach this app.
+The email **is** the invoice (GoHighLevel-style notification on top, the invoice document below, plus a PDF attachment): the full invoice is inline HTML, so the client never needs to reach this app.
 
 ## Run
 

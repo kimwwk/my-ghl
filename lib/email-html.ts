@@ -1,27 +1,13 @@
-// Pure renderer for the invoice email (HTML + plain text). Safe to import from client
-// components so the editor's live preview is the exact same markup that gets sent.
-import {
-  type BusinessProfile,
-  type Invoice,
-  formatDate,
-  formatMoney,
-  lineAmountCents,
-} from "./types";
+// Pure renderer for the invoice email (HTML + plain text), modelled on GoHighLevel's
+// "Invoice received" email followed by its hosted-page invoice layout. Safe to import from
+// client components so the editor's live preview is the same markup that gets sent.
+import { type DocInvoice, buildDocView } from "./invoice-view";
+import { type BusinessProfile, formatLongDate, formatMoneyGhl } from "./types";
 
-export const C = {
-  cream: "#fbfaf4",
-  ink: "#17201b",
-  green: "#0a6e48",
-  forest: "#07452e",
-  hair: "#e2e4dc",
-  soft: "#edf2e9",
-  body: "#4c564f",
-  caption: "#6b756d",
-};
-
-const SANS = "'Work Sans', Helvetica, Arial, sans-serif";
-const HEAD = "'Archivo', 'Arial Black', Helvetica, Arial, sans-serif";
-const MONO = "'IBM Plex Mono', 'Courier New', Courier, monospace";
+const FONT = "Ubuntu, Helvetica, Arial, sans-serif";
+const INK = "#101828";
+const MUTED = "#667085";
+const HAIR = "#eaecf0";
 
 export function esc(s: string): string {
   return String(s ?? "")
@@ -32,27 +18,12 @@ export function esc(s: string): string {
 }
 const nl = (s: string) => esc(s).replace(/\r?\n/g, "<br>");
 
-export function emailSubject(inv: Pick<Invoice, "number">, b: Pick<BusinessProfile, "display_name">) {
-  return `Invoice ${inv.number} from ${b.display_name || "us"}`;
+export function emailSubject(inv: { number: string }, b: Pick<BusinessProfile, "display_name">) {
+  return `[${b.display_name || "Invoice"}] Invoice ${inv.number}`;
 }
 
 export interface RenderInput {
-  invoice: Pick<
-    Invoice,
-    | "number"
-    | "currency"
-    | "issue_date"
-    | "due_date"
-    | "bill_to"
-    | "items"
-    | "tax"
-    | "subtotal_cents"
-    | "tax_cents"
-    | "total_cents"
-    | "notes"
-    | "message"
-    | "payment"
-  >;
+  invoice: DocInvoice;
   business: BusinessProfile;
   /** img src for the logo: "cid:kivov-logo" when sending, "/api/logo" in the preview */
   logoSrc: string;
@@ -60,183 +31,178 @@ export interface RenderInput {
   payUrl: string | null;
 }
 
-function label(text: string, color = C.caption) {
-  return `<div style="font-family:${MONO};font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:${color};line-height:16px;">${esc(text)}</div>`;
-}
-
-function band(bg: string, inner: string, borderBottom = false) {
-  return `<tr><td style="background:${bg};${borderBottom ? `border-bottom:1px solid ${C.hair};` : ""}padding:0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;margin:0 auto;"><tr><td style="padding:28px 28px;">${inner}</td></tr></table>
-</td></tr>`;
+function firstName(full: string) {
+  return full.trim().split(/\s+/)[0] || "there";
 }
 
 export function renderInvoiceEmail(input: RenderInput): { html: string; text: string } {
   const { invoice: inv, business: b, logoSrc, payUrl } = input;
-  const cur = inv.currency;
-  const money = (c: number) => formatMoney(c, cur);
-  const greetingName = inv.bill_to.name.trim().split(/\s+/)[0] || "there";
-  const wantCard = inv.payment.card;
-  const wantEt = inv.payment.etransfer;
+  const v = buildDocView(inv, b);
+  const accent = v.accent;
+  const first = firstName(inv.bill_to.name);
+  const amountDue = formatMoneyGhl(inv.total_cents, inv.currency);
+  const showPay = inv.payment.card && inv.status !== "paid" && inv.status !== "void";
+  const payHref = payUrl ? esc(payUrl) : "#";
 
-  // --- header band
-  const header = `<tr><td style="background:${C.cream};border-bottom:1px solid ${C.hair};padding:0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;margin:0 auto;"><tr>
-<td style="padding:20px 28px;" align="left"><img src="${esc(logoSrc)}" alt="${esc(b.display_name)}" height="34" style="display:block;height:34px;width:auto;border:0;"></td>
-<td style="padding:20px 28px;" align="right">${label("Invoice")}<div style="font-family:${MONO};font-size:14px;color:${C.ink};line-height:20px;">${esc(inv.number)}</div></td>
+  const row = (inner: string, pad = "10px 20px") =>
+    `<tr><td align="left" style="padding:${pad};word-break:break-word;">${inner}</td></tr>`;
+  const txt = (inner: string) =>
+    `<div style="font-family:${FONT};font-size:14px;line-height:1.5;color:#000000;">${inner}</div>`;
+  const p = (inner: string) => `<p style="margin:0 0 13px 0;line-height:1.5;">${inner}</p>`;
+
+  // ---------- part 1: notification ----------
+  const logoImg = `<img src="${esc(logoSrc)}" alt="${esc(b.display_name)}" height="48" style="display:block;border:0;height:48px;width:auto;max-height:48px;max-width:180px;">`;
+  const intro = [
+    row(logoImg),
+    row(`<h2 style="margin:0;font-family:${FONT};font-size:24px;line-height:1.5;font-weight:700;color:#000000;">Invoice for ${esc(first)}</h2>`),
+    row(
+      txt(
+        p(`Hi ${esc(first)},`) +
+          p(
+            `${esc(b.display_name)} sent you invoice ${esc(inv.number)} for ${esc(amountDue)} that&rsquo;s due on ${esc(formatLongDate(inv.due_date))}`,
+          ) +
+          (inv.message.trim() ? p(nl(inv.message)) : ""),
+      ),
+    ),
+  ];
+  if (showPay) {
+    intro.push(
+      row(
+        `<table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse:separate;line-height:100%;"><tr>
+<td align="center" bgcolor="${accent}" style="background:${accent};border-radius:3px;"><a href="${payHref}" target="_blank" style="display:inline-block;padding:11px 25px;font-family:Helvetica, Arial, sans-serif;font-size:14px;font-weight:700;line-height:120%;color:#ffffff;text-decoration:none;">Pay invoice</a></td></tr></table>`,
+        "0 20px",
+      ),
+      row(
+        txt(
+          p(
+            `Unable to see the button? <a href="${payHref}" target="_blank" style="color:${accent};text-decoration:underline;">Pay invoice</a>${payUrl ? "" : ` <span style="color:${MUTED};">(link is created when the invoice is sent)</span>`}`,
+          ),
+        ),
+      ),
+    );
+  }
+  intro.push(
+    row(
+      txt(
+        `<p style="margin:0 0 13px 0;">Regards,</p><p style="margin:0 0 13px 0;">${esc(b.sender_name || b.display_name)}</p><p style="margin:0;">${esc(b.display_name)}</p>`,
+      ),
+    ),
+  );
+
+  // ---------- part 2: invoice document ----------
+  const label = (t: string) =>
+    `<div style="font-family:${FONT};font-size:13px;font-weight:500;line-height:20px;color:${INK};">${esc(t)}</div>`;
+  const value = (t: string) =>
+    `<div style="font-family:${FONT};font-size:13px;line-height:20px;color:${MUTED};">${t}</div>`;
+
+  const titleBlock = `<tr><td align="right" style="padding:0;border-bottom:1px solid #000000;font-family:${FONT};font-size:34px;line-height:44px;font-weight:500;color:#000000;">INVOICE</td></tr>`;
+
+  const bizBlock = `<tr><td style="padding:20px 0 16px 0;border-bottom:1px solid ${HAIR};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td valign="top" align="left"><img src="${esc(logoSrc)}" alt="" height="48" style="display:block;border:0;height:48px;width:auto;max-height:48px;max-width:180px;"></td>
+<td valign="top" align="right" style="font-family:${FONT};">
+<div style="font-size:17px;line-height:24px;color:#000000;">${esc(v.business.name)}</div>
+${v.business.lines.map((l) => `<div style="font-size:12px;line-height:19px;color:${MUTED};">${esc(l)}</div>`).join("")}
+</td></tr></table></td></tr>`;
+
+  const meta = `<tr><td style="padding:18px 0 22px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td valign="top" width="42%" style="padding-right:8px;">${label("Billed to")}${v.billedTo.map((l) => value(esc(l))).join("")}</td>
+<td valign="top" width="24%" style="padding-right:8px;padding-top:2px;">${label("Invoice No")}${value(esc(v.number))}</td>
+<td valign="top" width="34%" style="padding-top:2px;">${label("Issue Date")}${value(esc(v.issueDate))}<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>${label("Due Date")}${value(esc(v.dueDate))}</td>
 </tr></table></td></tr>`;
 
-  // --- hero band (green)
-  const hero = band(
-    C.green,
-    `${label("Amount due", "#bfe5cf")}
-<div style="font-family:${HEAD};font-size:40px;line-height:46px;font-weight:900;color:${C.cream};padding-top:6px;">${esc(money(inv.total_cents))}</div>
-<div style="font-family:${SANS};font-size:15px;line-height:22px;color:${C.cream};padding-top:10px;">Due ${esc(formatDate(inv.due_date))} &nbsp;&middot;&nbsp; Issued ${esc(formatDate(inv.issue_date))}</div>`,
-  );
-
-  // --- greeting
-  const greeting = band(
-    C.cream,
-    `<div style="font-family:${SANS};font-size:16px;line-height:25px;color:${C.body};">
-<div style="color:${C.ink};">Hi ${esc(greetingName)},</div>
-<div style="padding-top:12px;">${
-      inv.message.trim()
-        ? nl(inv.message)
-        : `Please find invoice ${esc(inv.number)} from ${esc(b.display_name)} below.`
-    }</div></div>`,
-  );
-
-  // --- pay by card CTA
-  let cta = "";
-  if (wantCard) {
-    const href = payUrl ? esc(payUrl) : "#";
-    cta = `<tr><td style="background:${C.cream};padding:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;margin:0 auto;"><tr><td style="padding:0 28px 28px 28px;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${C.green};border-radius:999px;"><a href="${href}" style="display:inline-block;font-family:${SANS};font-size:16px;font-weight:600;color:${C.cream};text-decoration:none;padding:14px 32px;">Pay by card &mdash; ${esc(money(inv.total_cents))}</a></td></tr></table>
-<div style="font-family:${SANS};font-size:13px;line-height:19px;color:${C.caption};padding-top:10px;">Secure checkout by Stripe.${payUrl ? "" : " (Link is created when the invoice is sent.)"}</div>
-</td></tr></table></td></tr>`;
-  }
-
-  // --- invoice table
-  const th = (t: string, align = "left") =>
-    `<td align="${align}" style="padding:10px 0;border-bottom:1px solid ${C.ink};font-family:${MONO};font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:${C.caption};">${t}</td>`;
-  const rows = inv.items
-    .filter((it) => it.description.trim() || it.unit_price_cents)
+  const th = (t: string, align: string, w = "") =>
+    `<td ${w} align="${align}" style="padding:10px 0;border-bottom:2px solid ${accent};font-family:${FONT};font-size:11px;font-weight:500;letter-spacing:0.4px;text-transform:uppercase;color:#000000;">${t}</td>`;
+  const td = (inner: string, align: string, extra = "") =>
+    `<td align="${align}" valign="top" style="padding:9px 0;font-family:${FONT};font-size:12px;line-height:19px;color:${INK};${extra}">${inner}</td>`;
+  const items = v.rows
     .map(
-      (it) => `<tr>
-<td style="padding:12px 12px 12px 0;border-bottom:1px solid ${C.hair};font-family:${SANS};font-size:15px;line-height:22px;color:${C.ink};vertical-align:top;">${nl(it.description)}</td>
-<td align="right" style="padding:12px 0;border-bottom:1px solid ${C.hair};font-family:${SANS};font-size:15px;color:${C.body};vertical-align:top;white-space:nowrap;">${esc(String(it.quantity))}</td>
-<td align="right" style="padding:12px 0 12px 12px;border-bottom:1px solid ${C.hair};font-family:${SANS};font-size:15px;color:${C.body};vertical-align:top;white-space:nowrap;">${esc(money(it.unit_price_cents))}</td>
-<td align="right" style="padding:12px 0 12px 12px;border-bottom:1px solid ${C.hair};font-family:${SANS};font-size:15px;color:${C.ink};vertical-align:top;white-space:nowrap;">${esc(money(lineAmountCents(it)))}</td></tr>`,
+      (r) => `<tr>
+${td(`${esc(r.name)}${r.description ? `<div style="color:${MUTED};">${nl(r.description)}</div>` : ""}`, "left", "padding-right:8px;")}
+${td(esc(r.price), "right", "white-space:nowrap;padding-left:8px;")}
+${td(esc(r.qty), "center", "width:36px;")}
+${td(esc(r.tax), "center", "width:44px;")}
+${td(esc(r.subtotal), "right", "white-space:nowrap;padding-left:8px;")}</tr>`,
     )
     .join("");
-  const totalRow = (k: string, v: string, strong = false) =>
-    `<tr><td colspan="2"></td><td align="right" style="padding:8px 0 8px 12px;font-family:${strong ? MONO : SANS};font-size:${strong ? 12 : 14}px;${strong ? "letter-spacing:1.2px;text-transform:uppercase;" : ""}color:${strong ? C.ink : C.body};${strong ? `border-top:1px solid ${C.ink};` : ""}">${esc(k)}</td><td align="right" style="padding:8px 0 8px 12px;font-family:${strong ? HEAD : SANS};font-size:${strong ? 18 : 14}px;${strong ? "font-weight:800;" : ""}color:${C.ink};white-space:nowrap;${strong ? `border-top:1px solid ${C.ink};` : ""}">${esc(v)}</td></tr>`;
-  const taxRow = inv.tax
-    ? totalRow(`${inv.tax.name || "Tax"}${inv.tax.name.includes("%") ? "" : ` ${inv.tax.rate_percent}%`}`, money(inv.tax_cents))
-    : "";
+  const itemsTable = `<tr><td>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+<tr>${th("Item name", "left")}${th("Price", "right")}${th("Qty", "center", 'width="36"')}${th("Tax", "center", 'width="44"')}${th("Subtotal", "right")}</tr>
+${items}
+<tr><td colspan="5" style="border-top:1px solid ${HAIR};font-size:0;line-height:0;height:1px;">&nbsp;</td></tr>
+</table></td></tr>`;
 
-  const billTo = [inv.bill_to.company, inv.bill_to.name].filter(Boolean).map((l, i) => i === 0 && inv.bill_to.company ? `<strong style="color:${C.ink};">${esc(l)}</strong>` : esc(l)).join("<br>");
-  const billAddr = inv.bill_to.address.trim() ? `<br>${nl(inv.bill_to.address)}` : "";
-  const billMail = inv.bill_to.email ? `<br>${esc(inv.bill_to.email)}` : "";
-  const fromLines = [
-    `<strong style="color:${C.ink};">${esc(b.display_name)}</strong>`,
-    b.legal_name && b.legal_name !== b.display_name ? esc(b.legal_name) : "",
-    b.address.trim() ? nl(b.address) : "",
-    b.email ? esc(b.email) : "",
-    b.tax_number ? `Tax no. ${esc(b.tax_number)}` : "",
-  ]
-    .filter(Boolean)
-    .join("<br>");
+  const totalRows = v.totals
+    .map((t) => {
+      const top = t.rule ? `border-top:1px solid ${HAIR};` : "";
+      const lab = t.strong
+        ? `font-size:15px;font-weight:500;color:#000000;padding-top:12px;`
+        : `font-size:12px;font-weight:700;color:${INK};padding-top:7px;`;
+      const val = t.strong
+        ? `font-size:13px;font-weight:700;color:#000000;padding-top:12px;`
+        : `font-size:12px;color:${MUTED};padding-top:7px;`;
+      return `<tr><td style="${top}${lab}padding-bottom:6px;padding-left:12px;font-family:${FONT};">${esc(t.label)}</td><td align="right" style="${top}${val}padding-bottom:6px;font-family:${FONT};white-space:nowrap;">${esc(t.value)}</td></tr>`;
+    })
+    .join("");
+  const totals = `<tr><td align="right" style="padding-top:6px;">
+<table role="presentation" width="56%" align="right" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">${totalRows}</table></td></tr>`;
 
-  const table = band(
-    C.cream,
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td valign="top" width="50%" style="padding-right:12px;font-family:${SANS};font-size:14px;line-height:21px;color:${C.body};">${label("Bill to")}<div style="padding-top:6px;">${billTo}${billAddr}${billMail}</div></td>
-<td valign="top" width="50%" style="padding-left:12px;font-family:${SANS};font-size:14px;line-height:21px;color:${C.body};">${label("From")}<div style="padding-top:6px;">${fromLines}</div></td>
-</tr></table>
-<div style="height:26px;line-height:26px;font-size:0;">&nbsp;</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr>${th("Description")}${th("Qty", "right")}${th("Unit price", "right")}${th("Amount", "right")}</tr>
-${rows}
-${totalRow("Subtotal", money(inv.subtotal_cents))}
-${taxRow}
-${totalRow(`Total ${cur}`, money(inv.total_cents), true)}
-</table>`,
-    true,
-  );
-
-  // --- e-Transfer
-  let et = "";
-  if (wantEt && (b.etransfer_email || b.etransfer_text)) {
-    const instr = (b.etransfer_text || "")
-      .replace(/\{invoice\}/gi, inv.number)
-      .replace(/\{email\}/gi, b.etransfer_email);
-    et = band(
-      C.soft,
-      `${label("Pay by Interac e-Transfer", C.forest)}
-<div style="font-family:${SANS};font-size:15px;line-height:23px;color:${C.ink};padding-top:8px;">${instr.trim() ? nl(instr) : `Send an Interac e-Transfer to <strong>${esc(b.etransfer_email)}</strong> and put <strong>${esc(inv.number)}</strong> in the message.`}</div>
-${b.etransfer_email ? `<div style="font-family:${MONO};font-size:14px;color:${C.forest};padding-top:10px;">${esc(b.etransfer_email)}</div>` : ""}`,
-      true,
-    );
+  let stamp = "";
+  if (v.stamp) {
+    const bg = v.stamp.kind === "paid" ? "#f0fdf4" : "#f2f4f7";
+    stamp = `<tr><td style="padding-top:20px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" bgcolor="${bg}" style="background:${bg};padding:30px 10px;font-family:${FONT};">
+<div style="font-size:18px;line-height:26px;color:#000000;">${v.stamp.title}</div>${v.stamp.sub ? `<div style="font-size:12px;line-height:20px;color:${MUTED};">${esc(v.stamp.sub)}</div>` : ""}</td></tr></table></td></tr>`;
   }
 
-  // --- notes
-  const notes = inv.notes.trim()
-    ? band(
-        C.cream,
-        `${label("Notes and terms")}<div style="font-family:${SANS};font-size:14px;line-height:22px;color:${C.body};padding-top:6px;">${nl(inv.notes)}</div>`,
-      )
+  const terms = v.terms.length
+    ? `<tr><td style="padding-top:26px;font-family:${FONT};">
+<div style="font-size:13px;font-weight:700;line-height:20px;color:${INK};padding-bottom:6px;">Terms &amp; Notes:</div>
+${v.terms.map((t) => `<p style="margin:0 0 12px 0;font-size:13px;line-height:1.7;color:#000000;">${nl(t)}</p>`).join("")}
+</td></tr>`
     : "";
 
-  // --- footer band
-  const footer = band(
-    C.forest,
-    `<div style="font-family:${SANS};font-size:13px;line-height:20px;color:#d7e6dc;">
-<strong style="color:${C.cream};">${esc(b.display_name)}</strong>${b.legal_name && b.legal_name !== b.display_name ? ` &middot; ${esc(b.legal_name)}` : ""}<br>
-${[b.address.replace(/\r?\n/g, ", "), b.email, b.phone, b.tax_number ? `Tax no. ${b.tax_number}` : ""].filter(Boolean).map(esc).join(" &middot; ")}
-</div>`,
-  );
+  const doc = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+${titleBlock}${bizBlock}${meta}${itemsTable}${totals}${stamp}${terms}
+<tr><td style="padding-top:14px;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">This invoice is also attached to this email as ${esc(inv.number)}.pdf.</td></tr>
+</table>`;
 
   const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(emailSubject(inv, b))}</title></head>
-<body style="margin:0;padding:0;background:${C.cream};">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.cream};">
-${header}
-${hero}
-${greeting}
-${cta}
-${table}
-${et}
-${notes}
-${footer}
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light only">
+<title>${esc(emailSubject(inv, b))}</title>
+<!--[if !mso]><!--><link href="https://fonts.googleapis.com/css?family=Ubuntu:300,400,500,700&display=swap" rel="stylesheet" type="text/css"><style type="text/css">@import url(https://fonts.googleapis.com/css?family=Ubuntu:300,400,500,700&display=swap);</style><!--<![endif]-->
+</head>
+<body style="margin:0;padding:0;word-spacing:normal;background:#EAF0F6;">
+<div style="background:#EAF0F6;padding:0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EAF0F6;"><tr><td align="center" style="padding:0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;">
+${intro.join("\n")}
+<tr><td style="padding:34px 20px 30px 20px;">${doc}</td></tr>
 </table>
+</td></tr></table>
+</div>
 </body></html>`;
 
-  // --- plain text
+  // ---------- plain text ----------
   const t: string[] = [];
-  t.push(`Invoice ${inv.number} from ${b.display_name}`, "");
-  t.push(`Hi ${greetingName},`, "");
-  t.push(inv.message.trim() || `Please find invoice ${inv.number} from ${b.display_name} below.`, "");
-  t.push(`Amount due: ${money(inv.total_cents)}`, `Due: ${formatDate(inv.due_date)}   Issued: ${formatDate(inv.issue_date)}`, "");
-  if (wantCard) t.push(`Pay by card: ${payUrl ?? "(link created when sent)"}`, "");
-  t.push("BILL TO", ...[inv.bill_to.company, inv.bill_to.name, inv.bill_to.address, inv.bill_to.email].filter(Boolean), "");
-  t.push("FROM", ...[b.display_name, b.legal_name, b.address, b.email, b.phone, b.tax_number && `Tax no. ${b.tax_number}`].filter(Boolean) as string[], "");
-  t.push("ITEMS");
-  for (const it of inv.items.filter((i) => i.description.trim() || i.unit_price_cents)) {
-    t.push(`- ${it.description} | ${it.quantity} x ${money(it.unit_price_cents)} = ${money(lineAmountCents(it))}`);
+  t.push(`Invoice for ${first}`, "", `Hi ${first},`, "");
+  t.push(`${b.display_name} sent you invoice ${inv.number} for ${amountDue} that's due on ${formatLongDate(inv.due_date)}`, "");
+  if (inv.message.trim()) t.push(inv.message.trim(), "");
+  if (showPay) t.push(`Pay invoice: ${payUrl ?? "(link created when sent)"}`, "");
+  t.push("Regards,", b.sender_name || b.display_name, b.display_name, "");
+  t.push("----------------------------------------", "INVOICE", "");
+  t.push(v.business.name, ...v.business.lines, "");
+  t.push("Billed to", ...v.billedTo, "");
+  t.push(`Invoice No: ${v.number}`, `Issue Date: ${v.issueDate}`, `Due Date: ${v.dueDate}`, "");
+  t.push("ITEMS (name | price | qty | tax | subtotal)");
+  for (const r of v.rows) {
+    t.push(`- ${r.name} | ${r.price} | ${r.qty} | ${r.tax} | ${r.subtotal}`);
+    if (r.description) t.push(`  ${r.description.replace(/\n/g, "\n  ")}`);
   }
-  t.push("", `Subtotal: ${money(inv.subtotal_cents)}`);
-  if (inv.tax) t.push(`${inv.tax.name || "Tax"} ${inv.tax.rate_percent}%: ${money(inv.tax_cents)}`);
-  t.push(`Total: ${money(inv.total_cents)}`, "");
-  if (wantEt && (b.etransfer_email || b.etransfer_text)) {
-    t.push("PAY BY INTERAC E-TRANSFER");
-    t.push(
-      (b.etransfer_text || `Send an Interac e-Transfer to ${b.etransfer_email} and put ${inv.number} in the message.`)
-        .replace(/\{invoice\}/gi, inv.number)
-        .replace(/\{email\}/gi, b.etransfer_email),
-    );
-    t.push("");
-  }
-  if (inv.notes.trim()) t.push("NOTES & TERMS", inv.notes, "");
-  t.push("--", [b.display_name, b.legal_name, b.email, b.phone].filter(Boolean).join(" | "));
+  t.push("");
+  for (const x of v.totals) t.push(`${x.label}: ${x.value}`);
+  if (v.stamp) t.push("", `${v.stamp.title} ${v.stamp.sub}`.trim());
+  if (v.terms.length) t.push("", "Terms & Notes:", ...v.terms.flatMap((x) => [x, ""]));
+  t.push("", `The invoice is also attached as ${inv.number}.pdf.`);
   return { html, text: t.join("\n") };
 }

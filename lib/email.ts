@@ -31,6 +31,7 @@ export interface OutgoingMail {
   text: string;
   /** label used for the .eml filename in file mode, e.g. the invoice number */
   label: string;
+  pdf?: { filename: string; content: Buffer };
 }
 
 export function transportReady(): { ok: boolean; reason?: string } {
@@ -57,6 +58,9 @@ export async function buildMime(mail: OutgoingMail, from: string, replyTo?: stri
         cid: LOGO_CID,
         contentDisposition: "inline",
       },
+      ...(mail.pdf
+        ? [{ filename: mail.pdf.filename, content: mail.pdf.content, contentType: "application/pdf" }]
+        : []),
     ],
   });
   return new Promise((resolve, reject) => {

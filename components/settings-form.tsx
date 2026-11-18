@@ -107,6 +107,14 @@ export function SettingsForm({
             <Field label="Email"><Input type="email" value={v.email} onChange={(e) => set("email", e.target.value)} /></Field>
             <Field label="Phone"><Input value={v.phone} onChange={(e) => set("phone", e.target.value)} /></Field>
             <Field label="Tax / HST number (optional)"><Input value={v.tax_number} onChange={(e) => set("tax_number", e.target.value)} /></Field>
+            <Field label="Website (optional)"><Input value={v.website} onChange={(e) => set("website", e.target.value)} /></Field>
+            <Field label="Email sender name" hint="Signs the invoice email: Regards, <name>."><Input value={v.sender_name} onChange={(e) => set("sender_name", e.target.value)} /></Field>
+            <Field label="Accent colour" hint="Pay button and the line-items header rule.">
+              <div className="flex gap-2">
+                <input type="color" aria-label="Accent colour" value={/^#[0-9a-fA-F]{6}$/.test(v.accent_color) ? v.accent_color : "#0a6e48"} onChange={(e) => set("accent_color", e.target.value)} className="h-8 w-10 border border-input bg-transparent p-0.5" />
+                <Input value={v.accent_color} onChange={(e) => set("accent_color", e.target.value)} className="font-mono" />
+              </div>
+            </Field>
           </div>
           <Field label="Address"><Textarea rows={3} value={v.address} onChange={(e) => set("address", e.target.value)} /></Field>
           <div className="flex flex-wrap items-center gap-4 border border-border bg-card p-3">

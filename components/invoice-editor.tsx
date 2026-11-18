@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Copy, Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +18,7 @@ import {
   syncInvoiceAction,
   voidInvoiceAction,
 } from "@/app/actions";
-import { renderInvoiceEmail } from "@/lib/email-html";
+import { emailSubject, renderInvoiceEmail } from "@/lib/email-html";
 import {
   type BusinessProfile,
   type Currency,
@@ -146,6 +146,9 @@ export function InvoiceEditor({
           notes,
           message,
           payment: { etransfer: payEt, card: payCard },
+          status: invoice?.status ?? "draft",
+          paid: invoice?.paid ?? null,
+          voided_at: invoice?.voided_at ?? null,
         },
         business,
         logoSrc: "/api/logo",
@@ -305,6 +308,11 @@ export function InvoiceEditor({
             </>
           )}
           {invoice && (
+            <a href={`/invoices/${invoice.id}/pdf`} className={buttonVariants({ variant: "outline" })}>
+              Download PDF
+            </a>
+          )}
+          {invoice && (
             <Button variant="outline" onClick={act.duplicate} disabled={pending}>
               Duplicate
             </Button>
@@ -410,9 +418,10 @@ export function InvoiceEditor({
             <div className="space-y-3">
               {rows.map((r, i) => (
                 <div key={i} className="grid grid-cols-[70px_1fr_1fr_32px] items-center gap-2 border-b border-border pb-3">
-                  <Input
-                    className="col-span-4"
-                    placeholder="Description"
+                  <Textarea
+                    className="col-span-4 min-h-8"
+                    rows={2}
+                    placeholder="Item name (first line), then optional description lines"
                     value={r.description}
                     onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))}
                   />
@@ -515,7 +524,7 @@ export function InvoiceEditor({
         <div className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
           <div className="flex items-baseline justify-between">
             <p className="label-mono">Live email preview</p>
-            <p className="text-xs text-caption">Subject: Invoice {number} from {business.display_name}</p>
+            <p className="text-xs text-caption">Subject: {emailSubject({ number }, business)}</p>
           </div>
           <iframe title="Email preview" sandbox="" srcDoc={preview} className="h-[760px] w-full border border-border bg-background xl:h-[calc(100vh-9rem)]" />
 

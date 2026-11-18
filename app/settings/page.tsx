@@ -33,6 +33,9 @@ export default async function SettingsPage({
         terms_days: s.terms_days,
         etransfer_email: s.etransfer_email,
         etransfer_text: s.etransfer_text,
+        website: s.website,
+        sender_name: s.sender_name,
+        accent_color: s.accent_color,
         google_client_id: g.clientId,
       }}
       stripe={{

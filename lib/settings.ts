@@ -18,6 +18,9 @@ export interface Settings {
   terms_days: number;
   etransfer_email: string;
   etransfer_text: string;
+  website: string;
+  sender_name: string;
+  accent_color: string;
   stripe_secret_key: string;
   google_client_id: string;
   google_client_secret: string;
@@ -44,6 +47,9 @@ export const DEFAULTS: Settings = {
   etransfer_email: "",
   etransfer_text:
     "Send an Interac e-Transfer to {email} and put the invoice number ({invoice}) in the message.",
+  website: "",
+  sender_name: "Kim Wong",
+  accent_color: "#0a6e48",
   stripe_secret_key: "",
   google_client_id: "",
   google_client_secret: "",
@@ -106,6 +112,9 @@ export function business(s: Settings = getSettings()): BusinessProfile {
     tax_number: s.tax_number,
     etransfer_email: s.etransfer_email,
     etransfer_text: s.etransfer_text,
+    website: s.website,
+    sender_name: s.sender_name,
+    accent_color: /^#[0-9a-fA-F]{6}$/.test(s.accent_color) ? s.accent_color : DEFAULTS.accent_color,
   };
 }
 

@@ -2,7 +2,7 @@
 
 Base URL `http://localhost:8796`. Every request needs `Authorization: Bearer $INVOICE_API_TOKEN`
 (the value in `.env.local`). JSON in, JSON out. Errors are `{"error": "<message>"}` with a 4xx/5xx status.
-Money is integer cents. Dates are `YYYY-MM-DD`.
+Money is integer cents. A line item's `description` is shown as the item name (first line) with any further lines underneath in grey. Dates are `YYYY-MM-DD`.
 
 ```bash
 export TOKEN=$(grep ^INVOICE_API_TOKEN .env.local | cut -d= -f2)
@@ -97,6 +97,14 @@ The response includes `sync: {paid, note}`.
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/invoices/$ID/sync"
+```
+
+## Download the invoice PDF
+
+Returns `application/pdf` (the same document that is attached to the sent email as `<number>.pdf`).
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/invoices/$ID/pdf" -o INV-0001.pdf
 ```
 
 ## Preview the email HTML
