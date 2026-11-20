@@ -13,6 +13,7 @@ import {
   deleteDraftAction,
   duplicateInvoiceAction,
   markPaidAction,
+  recordRefundAction,
   saveInvoiceAction,
   sendInvoiceAction,
   syncInvoiceAction,
@@ -24,10 +25,12 @@ import {
   type Currency,
   type Invoice,
   type PaidMethod,
+  PAID_METHOD_LABEL,
   centsToInput,
   computeTotals,
   formatDate,
   formatMoney,
+  formatMoneyGhl,
   lineAmountCents,
   parseMoneyToCents,
   todayISO,
@@ -79,8 +82,11 @@ export function InvoiceEditor({
   business,
   stripeEnabled,
   sendBlock,
+  hasOriginal = false,
 }: {
   invoice: Invoice | null;
+  /** an original PDF from GoHighLevel is on file for this invoice */
+  hasOriginal?: boolean;
   defaults: EditorDefaults;
   business: BusinessProfile;
   stripeEnabled: boolean;
@@ -119,6 +125,11 @@ export function InvoiceEditor({
   const [paidDate, setPaidDate] = useState(todayISO());
   const [paidNote, setPaidNote] = useState("");
   const [overrideTo, setOverrideTo] = useState("");
+  const refundLeft = invoice ? invoice.total_cents - (invoice.refund?.cents ?? 0) : 0;
+  const [showRefund, setShowRefund] = useState(false);
+  const [refundAmount, setRefundAmount] = useState(centsToInput(refundLeft));
+  const [refundDate, setRefundDate] = useState(todayISO());
+  const [refundNote, setRefundNote] = useState("");
 
   const items = rows.map((r) => ({
     description: r.description,
@@ -250,6 +261,15 @@ export function InvoiceEditor({
           router.refresh();
         } else toast.error(r.error);
       }),
+    refund: () =>
+      run(async () => {
+        const r = await recordRefundAction(invoice!.id, refundAmount, refundDate, refundNote);
+        if (r.ok) {
+          toast.success("Refund recorded");
+          setShowRefund(false);
+          router.refresh();
+        } else toast.error(r.error);
+      }),
     sync: () =>
       run(async () => {
         const r = await syncInvoiceAction(invoice!.id);
@@ -307,9 +327,19 @@ export function InvoiceEditor({
               )}
             </>
           )}
+          {status === "paid" && refundLeft > 0 && (
+            <Button onClick={() => setShowRefund((v) => !v)} variant={showRefund ? "secondary" : "outline"} disabled={pending}>
+              Record refund
+            </Button>
+          )}
           {invoice && (
             <a href={`/invoices/${invoice.id}/pdf`} className={buttonVariants({ variant: "outline" })}>
               Download PDF
+            </a>
+          )}
+          {invoice && hasOriginal && (
+            <a href={`/invoices/${invoice.id}/original`} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "outline" })}>
+              Original PDF (GHL)
             </a>
           )}
           {invoice && (
@@ -343,7 +373,11 @@ export function InvoiceEditor({
       {locked && (
         <p className="mt-3 border-l-2 border-primary bg-secondary px-3 py-2 text-sm text-inkdeep">
           {status === "sent" && "This invoice has been sent and is locked. To change it, void it and duplicate it into a new draft."}
-          {status === "paid" && `Paid on ${formatDate(invoice!.paid!.at)} by ${invoice!.paid!.method}${invoice!.paid!.note ? ` (${invoice!.paid!.note})` : ""}. Locked.`}
+          {status === "paid" &&
+            `Paid on ${formatDate(invoice!.paid!.at)} by ${PAID_METHOD_LABEL[invoice!.paid!.method] ?? invoice!.paid!.method}${invoice!.paid!.note ? ` (${invoice!.paid!.note})` : ""}.`}
+          {status === "paid" && invoice!.refund &&
+            ` Refunded ${formatMoneyGhl(invoice!.refund.cents, invoice!.currency)} of ${formatMoneyGhl(invoice!.total_cents, invoice!.currency)}${invoice!.refund.at ? ` on ${formatDate(invoice!.refund.at)}` : ", date not recorded"}${invoice!.refund.note ? ` (${invoice!.refund.note})` : ""}.`}
+          {status === "paid" && " Locked."}
           {status === "void" && "This invoice is void. Duplicate it to start a new draft."}
         </p>
       )}
@@ -367,6 +401,25 @@ export function InvoiceEditor({
           <div className="sm:col-span-4">
             <Button onClick={act.paid} disabled={pending}>
               Confirm payment
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showRefund && status === "paid" && (
+        <div className="mt-4 grid gap-4 border border-border bg-card p-4 sm:grid-cols-4">
+          <Field label={`Amount (${invoice!.currency})`}>
+            <Input inputMode="decimal" value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} className="font-mono" />
+          </Field>
+          <Field label="Date refunded">
+            <Input type="date" value={refundDate} onChange={(e) => setRefundDate(e.target.value)} />
+          </Field>
+          <Field label="Note" className="sm:col-span-2">
+            <Input value={refundNote} onChange={(e) => setRefundNote(e.target.value)} placeholder="Optional, e.g. Stripe refund id" />
+          </Field>
+          <div className="sm:col-span-4">
+            <Button onClick={act.refund} disabled={pending}>
+              Confirm refund
             </Button>
           </div>
         </div>

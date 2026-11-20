@@ -9,13 +9,13 @@ export TOKEN=$(grep ^INVOICE_API_TOKEN .env.local | cut -d= -f2)
 export BASE=http://localhost:8796
 ```
 
-Statuses: `draft`, `sent`, `paid`, `void`. `display_status` additionally returns `overdue` for sent invoices past due.
+Statuses: `draft`, `sent`, `paid`, `void`. `display_status` additionally returns `overdue` for sent invoices past due, and `refunded` / `part_refunded` for paid invoices with a refund recorded (see `refund`).
 
 ## List
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/invoices"
-curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/invoices?status=overdue"   # draft|sent|paid|void|overdue
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/invoices?status=overdue"   # draft|sent|paid|void|overdue|refunded
 ```
 
 ## Create a draft
@@ -72,6 +72,15 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/
 ```bash
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" "$BASE/api/v1/invoices/$ID/mark-paid" \
   -d '{"method":"etransfer","date":"2026-11-20","note":"ref 123"}'
+```
+
+## Record a refund
+
+Paid invoices only. Refunds add up and cannot exceed the total. `date` defaults to today.
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" "$BASE/api/v1/invoices/$ID/refund" \
+  -d '{"amount_cents":50000,"date":"2026-11-20","note":"Stripe refund"}'
 ```
 
 ## Void

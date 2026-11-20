@@ -6,7 +6,11 @@ const styles: Record<string, string> = {
   paid: "border-primary bg-primary text-primary-foreground",
   void: "border-border bg-background text-caption line-through",
   overdue: "border-destructive/40 bg-destructive/10 text-destructive",
+  refunded: "border-border bg-muted text-muted-foreground",
+  part_refunded: "border-primary/40 bg-background text-inkdeep",
 };
+
+const labels: Record<string, string> = { part_refunded: "part refunded" };
 
 export function StatusBadge({ status }: { status: string }) {
   return (
@@ -16,7 +20,7 @@ export function StatusBadge({ status }: { status: string }) {
         styles[status] ?? styles.draft,
       )}
     >
-      {status}
+      {labels[status] ?? status}
     </span>
   );
 }

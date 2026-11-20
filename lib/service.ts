@@ -5,7 +5,7 @@ import { invoicePdf } from "./pdf-service";
 import { emailSubject, renderInvoiceEmail } from "./email-html";
 import { createPaymentLink, deactivatePaymentLink, markPaidRow, stripeConfigured, syncInvoiceFromStripe } from "./stripe";
 import type { Invoice, PaidMethod } from "./types";
-import { todayISO } from "./types";
+import { formatMoneyGhl, todayISO } from "./types";
 
 const emailRe = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
@@ -118,6 +118,28 @@ export async function markPaid(
   return requireInvoice(id);
 }
 
+/** Records money given back on a paid invoice. Refunds add up; they cannot exceed the total. */
+export function recordRefund(id: string, opts: { amount_cents?: unknown; date?: unknown; note?: unknown }): Invoice {
+  const inv = requireInvoice(id);
+  if (inv.status !== "paid") throw new ApiError(409, `Invoice ${inv.number} is ${inv.status}; only paid invoices can be refunded.`);
+  const amount = Number(opts.amount_cents);
+  if (!Number.isInteger(amount) || amount <= 0)
+    throw new ApiError(400, "amount_cents must be a whole number of cents greater than zero");
+  const already = inv.refund?.cents ?? 0;
+  const left = inv.total_cents - already;
+  if (amount > left)
+    throw new ApiError(400, `Refund is more than what is left to refund (${formatMoneyGhl(left, inv.currency)}).`);
+  const date = opts.date ? String(opts.date) : todayISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError(400, "date must be YYYY-MM-DD");
+  const note = opts.note ? String(opts.note).slice(0, 500) : "";
+  patchRaw(id, {
+    refunded_cents: already + amount,
+    refunded_at: date,
+    refund_note: [inv.refund?.note, note].filter(Boolean).join("; "),
+  });
+  return requireInvoice(id);
+}
+
 export async function voidInvoice(id: string): Promise<{ invoice: Invoice; warning?: string }> {
   const inv = requireInvoice(id);
   if (inv.status === "void") throw new ApiError(409, `Invoice ${inv.number} is already void.`);
@@ -186,6 +208,7 @@ function createDemoInvoice(): Invoice {
     payment: { etransfer: true, card: false },
     stripe: { link_id: null, url: null, active: false },
     paid: null,
+    refund: null,
     sent_at: null,
     voided_at: null,
     sends: [],

@@ -53,6 +53,16 @@ function open(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS invoices_status ON invoices(status);
   `);
+  // Columns added after the first release.
+  const cols = new Set((db.prepare("PRAGMA table_info(invoices)").all() as { name: string }[]).map((c) => c.name));
+  const add: Record<string, string> = {
+    refunded_cents: "INTEGER NOT NULL DEFAULT 0",
+    refunded_at: "TEXT",
+    refund_note: "TEXT",
+  };
+  for (const [name, type] of Object.entries(add)) {
+    if (!cols.has(name)) db.exec(`ALTER TABLE invoices ADD COLUMN ${name} ${type}`);
+  }
   return db;
 }
 

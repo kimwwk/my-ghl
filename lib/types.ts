@@ -2,7 +2,15 @@
 
 export type Currency = "CAD" | "USD";
 export type Status = "draft" | "sent" | "paid" | "void";
+export type DisplayStatus = Status | "overdue" | "refunded" | "part_refunded";
 export type PaidMethod = "etransfer" | "card" | "eft" | "other";
+
+export const PAID_METHOD_LABEL: Record<PaidMethod, string> = {
+  etransfer: "e-Transfer",
+  card: "card",
+  eft: "EFT",
+  other: "other method",
+};
 
 export interface LineItem {
   description: string;
@@ -27,8 +35,8 @@ export interface Invoice {
   id: string;
   number: string;
   status: Status;
-  /** status plus derived "overdue" (sent and past due) */
-  display_status: Status | "overdue";
+  /** status plus derived states: "overdue" (sent, past due), "refunded" / "part_refunded" (paid, then refunded) */
+  display_status: DisplayStatus;
   currency: Currency;
   issue_date: string;
   due_date: string;
@@ -49,6 +57,8 @@ export interface Invoice {
   payment: { etransfer: boolean; card: boolean };
   stripe: { link_id: string | null; url: string | null; active: boolean };
   paid: { at: string; method: PaidMethod; note: string } | null;
+  /** money given back after payment; at = YYYY-MM-DD or null when the date was not recorded */
+  refund: { cents: number; at: string | null; note: string } | null;
   sent_at: string | null;
   voided_at: string | null;
   sends: SendLogEntry[];
@@ -127,7 +137,8 @@ export function addDaysISO(iso: string, days: number): string {
 }
 
 export function padNumber(prefix: string, n: number): string {
-  return `${prefix}${String(n).padStart(4, "0")}`;
+  // Six digits, matching the GoHighLevel numbering the earlier invoices used (INV-000018).
+  return `${prefix}${String(n).padStart(6, "0")}`;
 }
 
 /** GHL-style money: CAD -> "CA$1,695.00", USD -> "$2,420.00". */

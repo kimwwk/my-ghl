@@ -3,21 +3,21 @@ import { Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { RowActions } from "@/components/row-actions";
 import { StatusBadge } from "@/components/status-badge";
-import { listInvoices } from "@/lib/invoices";
+import { listInvoices, matchesFilter } from "@/lib/invoices";
 import { autoSyncSent } from "@/lib/stripe";
-import { formatDate, formatMoney } from "@/lib/types";
+import { formatDate, formatMoney, formatMoneyGhl } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const filters = ["all", "draft", "sent", "overdue", "paid", "void"] as const;
+const filters = ["all", "draft", "sent", "overdue", "paid", "refunded", "void"] as const;
 
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const { status = "all" } = await searchParams;
   await Promise.race([autoSyncSent(), new Promise((r) => setTimeout(r, 4000))]);
   const all = listInvoices();
-  const list = status === "all" ? all : all.filter((i) => i.display_status === status);
-  const count = (f: string) => (f === "all" ? all.length : all.filter((i) => i.display_status === f).length);
+  const list = all.filter((i) => matchesFilter(i, status));
+  const count = (f: string) => all.filter((i) => matchesFilter(i, f)).length;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -74,7 +74,12 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                     <div className="font-medium text-foreground">{i.bill_to.name || "—"}</div>
                     {i.bill_to.company && <div className="text-xs text-caption">{i.bill_to.company}</div>}
                   </td>
-                  <td className="px-2 py-3 font-mono whitespace-nowrap">{formatMoney(i.total_cents, i.currency)}</td>
+                  <td className="px-2 py-3 font-mono whitespace-nowrap">
+                    {formatMoney(i.total_cents, i.currency)}
+                    {i.refund && (
+                      <div className="text-xs text-caption">−{formatMoneyGhl(i.refund.cents, i.currency)} refunded</div>
+                    )}
+                  </td>
                   <td className="px-2 py-3">
                     <StatusBadge status={i.display_status} />
                   </td>

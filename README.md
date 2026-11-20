@@ -34,7 +34,8 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 - Drafts are editable. Sent invoices are locked: to change one, Void and Duplicate.
 - Send creates a single-use Stripe Payment Link (when card is on), emails via Gmail `users.messages.send`, logs the send, sets status `sent`.
 - Void deactivates the Payment Link. Marking paid by another method also deactivates it.
-- `overdue` is derived (sent and past due), not stored.
+- `overdue` is derived (sent and past due), not stored. So are `refunded` and `part_refunded` (paid, with a refund recorded).
+- Invoices brought over from GoHighLevel keep the PDF the client received at `data/imports/<number>.pdf`; the invoice page links it as "Original PDF (GHL)".
 - Stripe paid-status sync: "Sync" button, and an automatic throttled (60 s) sync of sent invoices when the list loads.
   Webhook for later deployment: `POST /api/stripe/webhook` (`STRIPE_WEBHOOK_SECRET`), or
   `stripe listen --forward-to localhost:8796/api/stripe/webhook`.

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "./db";
 import { getSettings, saveSettings, stripeKey } from "./settings";
 import {
+  type DisplayStatus,
   type Invoice,
   type PaidMethod,
   type SendLogEntry,
@@ -27,6 +28,11 @@ type Row = Record<string, unknown>;
 function toInvoice(r: Row): Invoice {
   const status = r.status as Status;
   const due = r.due_date as string;
+  const refunded = (r.refunded_cents as number) || 0;
+  const total = r.total_cents as number;
+  let display: DisplayStatus = status;
+  if (status === "sent" && due < todayISO()) display = "overdue";
+  if (status === "paid" && refunded > 0) display = refunded >= total ? "refunded" : "part_refunded";
   const tax =
     r.tax_name !== null && r.tax_rate !== null
       ? { name: r.tax_name as string, rate_percent: r.tax_rate as number }
@@ -35,7 +41,7 @@ function toInvoice(r: Row): Invoice {
     id: r.id as string,
     number: r.number as string,
     status,
-    display_status: status === "sent" && due < todayISO() ? "overdue" : status,
+    display_status: display,
     currency: r.currency as Invoice["currency"],
     issue_date: r.issue_date as string,
     due_date: due,
@@ -62,6 +68,10 @@ function toInvoice(r: Row): Invoice {
     paid: r.paid_at
       ? { at: r.paid_at as string, method: r.paid_method as PaidMethod, note: (r.paid_note as string) ?? "" }
       : null,
+    refund:
+      refunded > 0
+        ? { cents: refunded, at: (r.refunded_at as string) ?? null, note: (r.refund_note as string) ?? "" }
+        : null,
     sent_at: (r.sent_at as string) ?? null,
     voided_at: (r.voided_at as string) ?? null,
     sends: JSON.parse(r.sends as string),
@@ -85,12 +95,19 @@ export function listInvoices(status?: string): Invoice[] {
   const rows = db().prepare("SELECT * FROM invoices ORDER BY created_at DESC, rowid DESC").all() as Row[];
   let list = rows.map(toInvoice);
   if (status && status !== "all") {
-    if (!["draft", "sent", "paid", "void", "overdue"].includes(status)) {
-      throw new ApiError(400, `Unknown status "${status}". Use draft, sent, paid, void or overdue.`);
+    if (!["draft", "sent", "paid", "void", "overdue", "refunded"].includes(status)) {
+      throw new ApiError(400, `Unknown status "${status}". Use draft, sent, paid, void, overdue or refunded.`);
     }
-    list = list.filter((i) => i.display_status === status);
+    list = list.filter((i) => matchesFilter(i, status));
   }
   return list;
+}
+
+/** List filter: "refunded" covers full and partial refunds; the rest match display_status. */
+export function matchesFilter(i: Invoice, f: string): boolean {
+  if (f === "all") return true;
+  if (f === "refunded") return i.display_status === "refunded" || i.display_status === "part_refunded";
+  return i.display_status === f;
 }
 
 export function nextInvoiceNumber(): string {

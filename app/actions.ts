@@ -14,7 +14,8 @@ import {
 } from "@/lib/invoices";
 import { disconnectGoogle } from "@/lib/google";
 import { saveSettings as persistSettings, getSettings, type Settings } from "@/lib/settings";
-import { markPaid, sendInvoice, sendTestEmail, syncInvoice, voidInvoice } from "@/lib/service";
+import { markPaid, recordRefund, sendInvoice, sendTestEmail, syncInvoice, voidInvoice } from "@/lib/service";
+import { parseMoneyToCents } from "@/lib/types";
 import { stripeMode, testStripe } from "@/lib/stripe";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -48,6 +49,14 @@ export async function sendInvoiceAction(id: string, to?: string, cc?: string) {
 
 export async function markPaidAction(id: string, method: string, date: string, note: string) {
   return wrap(async () => ({ id: (await markPaid(id, { method, date, note })).id }));
+}
+
+export async function recordRefundAction(id: string, amount: string, date: string, note: string) {
+  return wrap(() => {
+    const cents = parseMoneyToCents(amount);
+    if (Number.isNaN(cents)) throw new ApiError(400, "Refund amount is not a number.");
+    return { id: recordRefund(id, { amount_cents: cents, date, note }).id };
+  });
 }
 
 export async function voidInvoiceAction(id: string) {
