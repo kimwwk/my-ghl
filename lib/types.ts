@@ -23,6 +23,21 @@ export interface Tax {
   rate_percent: number;
 }
 
+/** A saved client: the Bill to details, kept so they don't have to be retyped. */
+export interface Client {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  cc: string[];
+  address: string;
+  invoice_count: number;
+  /** issue date of the latest invoice with this client name, or null */
+  last_invoiced: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SendLogEntry {
   to: string[];
   cc: string[];

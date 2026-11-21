@@ -49,6 +49,16 @@ export interface EditorDefaults {
   card: boolean;
 }
 
+/** A saved client as the picker needs it. */
+export interface ClientOption {
+  id: string;
+  name: string;
+  company: string;
+  email: string;
+  cc: string[];
+  address: string;
+}
+
 interface Row {
   description: string;
   quantity: string;
@@ -83,8 +93,14 @@ export function InvoiceEditor({
   stripeEnabled,
   sendBlock,
   hasOriginal = false,
+  clients = [],
+  prefill = null,
 }: {
   invoice: Invoice | null;
+  /** saved clients for the Bill to picker */
+  clients?: ClientOption[];
+  /** a new invoice started from a saved client (Clients page > New invoice) */
+  prefill?: ClientOption | null;
   /** an original PDF from GoHighLevel is on file for this invoice */
   hasOriginal?: boolean;
   defaults: EditorDefaults;
@@ -101,11 +117,22 @@ export function InvoiceEditor({
   const [issue, setIssue] = useState(invoice?.issue_date ?? defaults.issue_date);
   const [due, setDue] = useState(invoice?.due_date ?? defaults.due_date);
   const [currency, setCurrency] = useState<Currency>(invoice?.currency ?? defaults.currency);
-  const [name, setName] = useState(invoice?.bill_to.name ?? "");
-  const [company, setCompany] = useState(invoice?.bill_to.company ?? "");
-  const [email, setEmail] = useState(invoice?.bill_to.email ?? "");
-  const [cc, setCc] = useState((invoice?.bill_to.cc ?? []).join(", "));
-  const [address, setAddress] = useState(invoice?.bill_to.address ?? "");
+  const start0 = invoice?.bill_to ?? prefill;
+  const [name, setName] = useState(start0?.name ?? "");
+  const [company, setCompany] = useState(start0?.company ?? "");
+  const [email, setEmail] = useState(start0?.email ?? "");
+  const [cc, setCc] = useState((start0?.cc ?? []).join(", "));
+  const [address, setAddress] = useState(start0?.address ?? "");
+  const pickClient = (id: string) => {
+    const c = clients.find((x) => x.id === id);
+    if (!c) return;
+    setName(c.name);
+    setCompany(c.company);
+    setEmail(c.email);
+    setCc(c.cc.join(", "));
+    setAddress(c.address);
+  };
+  const savedMatch = clients.find((c) => c.name.trim().toLowerCase() === name.trim().toLowerCase());
   const [rows, setRows] = useState<Row[]>(
     invoice?.items.length
       ? invoice.items.map((i) => ({ description: i.description, quantity: String(i.quantity), price: centsToInput(i.unit_price_cents) }))
@@ -496,6 +523,23 @@ export function InvoiceEditor({
           </Section>
 
           <Section title="Bill to">
+            {!locked && clients.length > 0 && (
+              <Field label="Saved client">
+                <select className={selectCls} value={savedMatch?.id ?? ""} onChange={(e) => pickClient(e.target.value)}>
+                  <option value="">{savedMatch ? "" : "Choose a saved client, or type a new one below"}</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.company ? ` (${c.company})` : ""}
+                      {c.email ? ` · ${c.email}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="pt-1.5 text-xs text-caption">
+                  Fills the fields below. Saving the invoice saves these details to the client for next time.
+                </p>
+              </Field>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Client name">
                 <Input value={name} onChange={(e) => setName(e.target.value)} />

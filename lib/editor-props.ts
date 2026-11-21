@@ -1,5 +1,6 @@
 import { business, getSettings, stripeKey } from "./settings";
 import { transportReady } from "./email";
+import { listClients } from "./clients";
 import { nextInvoiceNumber } from "./invoices";
 import { addDaysISO, todayISO } from "./types";
 import type { EditorDefaults } from "@/components/invoice-editor";
@@ -21,5 +22,12 @@ export function editorProps() {
     card: stripeEnabled,
   };
   const ready = transportReady();
-  return { defaults, business: business(s), stripeEnabled, sendBlock: ready.ok ? null : (ready.reason ?? "Email is not set up.") };
+  const clients = listClients().map(({ id, name, company, email, cc, address }) => ({ id, name, company, email, cc, address }));
+  return {
+    defaults,
+    business: business(s),
+    stripeEnabled,
+    sendBlock: ready.ok ? null : (ready.reason ?? "Email is not set up."),
+    clients,
+  };
 }

@@ -14,14 +14,10 @@ import {
   todayISO,
 } from "./types";
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { ApiError } from "./errors";
+import { clientById, upsertClientFromInvoice } from "./clients";
+
+export { ApiError };
 
 type Row = Record<string, unknown>;
 
@@ -144,6 +140,8 @@ const itemSchema = z.object({
 });
 
 export const invoiceInputSchema = z.object({
+  /** a saved client whose details fill any bill_to field not given (create only) */
+  client_id: z.string().trim().min(1).optional(),
   number: z.string().trim().min(1).max(40).optional(),
   currency: z.enum(["CAD", "USD"]).optional(),
   issue_date: isoDate.optional(),
@@ -204,7 +202,12 @@ export function createInvoice(input: InvoiceInput): Invoice {
   const payCard = input.payment?.card ?? hasStripe;
   const now = new Date().toISOString();
   const id = randomUUID();
-  const b = input.bill_to ?? {};
+  let b = input.bill_to ?? {};
+  if (input.client_id) {
+    const c = clientById(input.client_id);
+    if (!c) throw new ApiError(404, `Client ${input.client_id} not found`);
+    b = { name: c.name, company: c.company, email: c.email, cc: c.cc, address: c.address, ...b };
+  }
   db()
     .prepare(
       `INSERT INTO invoices (id, number, status, currency, issue_date, due_date, client_name, client_company,
@@ -237,6 +240,7 @@ export function createInvoice(input: InvoiceInput): Invoice {
       now,
     });
   bumpNextNumber(number);
+  upsertClientFromInvoice({ name: b.name ?? "", company: b.company ?? "", email: b.email ?? "", cc: b.cc ?? [], address: b.address ?? "" });
   return requireInvoice(id);
 }
 
@@ -285,6 +289,7 @@ export function updateInvoice(id: string, input: InvoiceInput): Invoice {
       now: new Date().toISOString(),
     });
   bumpNextNumber(number);
+  upsertClientFromInvoice(b);
   return requireInvoice(id);
 }
 

@@ -49,6 +49,9 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
   const link = (href: string, label: string, style: string) =>
     `<a href="${esc(href)}" target="_blank" style="${style}text-decoration:none;">${esc(label)}</a>`;
   const nowrap = (inner: string) => `<span style="white-space:nowrap;">${inner}</span>`;
+  // Gmail's apps turn anything that looks like a street address into a Google Maps link. An
+  // invisible zero-width non-joiner before each space breaks its pattern; the text looks the same.
+  const noMap = (s: string) => esc(s).replace(/ /g, "&zwnj; ");
 
   const row = (inner: string, pad = "10px 20px") =>
     `<tr><td align="left" style="padding:${pad};word-break:break-word;">${inner}</td></tr>`;
@@ -109,7 +112,7 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
       const digits = l.replace(/[^\d+]/g, "");
       return digits ? link(`tel:${digits}`, l, muted) : esc(l);
     }
-    return esc(l);
+    return noMap(l);
   };
 
   const titleBlock = `<tr><td align="right" style="padding:0;border-bottom:1px solid #000000;font-family:${FONT};font-size:34px;line-height:44px;font-weight:500;color:#000000;">INVOICE</td></tr>`;
@@ -128,7 +131,7 @@ ${v.business.lines.map((l) => `<div style="font-size:12px;line-height:19px;color
   const col = (w: number, inner: string) =>
     `<!--[if mso]><td valign="top" width="${w}"><![endif]--><div style="display:inline-block;vertical-align:top;width:100%;max-width:${w}px;"><div style="padding:0 12px 14px 0;">${inner}</div></div><!--[if mso]></td><![endif]-->`;
   const billedTo = v.billedTo
-    .map((l) => value(inv.bill_to.email && l === inv.bill_to.email ? link(`mailto:${l}`, l, muted) : esc(l), "word-break:break-word;"))
+    .map((l) => value(inv.bill_to.email && l === inv.bill_to.email ? link(`mailto:${l}`, l, muted) : noMap(l), "word-break:break-word;"))
     .join("");
   const meta = `<tr><td style="padding:18px 0 8px 0;font-size:0;line-height:0;">
 <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><![endif]-->${col(240, label("Billed to") + billedTo)}${col(110, label("Invoice No") + value(esc(v.number), "white-space:nowrap;"))}${col(

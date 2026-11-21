@@ -12,6 +12,7 @@ import {
   parseInvoiceInput,
   updateInvoice,
 } from "@/lib/invoices";
+import { createClient, deleteClient, parseClientInput, updateClient } from "@/lib/clients";
 import { disconnectGoogle } from "@/lib/google";
 import { saveSettings as persistSettings, getSettings, type Settings } from "@/lib/settings";
 import { markPaid, recordRefund, sendInvoice, sendTestEmail, syncInvoice, voidInvoice } from "@/lib/service";
@@ -36,6 +37,20 @@ export async function saveInvoiceAction(id: string | null, input: unknown) {
     const parsed = parseInvoiceInput(input);
     const inv = id ? updateInvoice(id, parsed) : createInvoice(parsed);
     return { id: inv.id };
+  });
+}
+
+export async function saveClientAction(id: string | null, input: unknown) {
+  return wrap(() => {
+    const b = parseClientInput(input);
+    return { id: (id ? updateClient(id, b) : createClient(b)).id };
+  });
+}
+
+export async function deleteClientAction(id: string) {
+  return wrap(() => {
+    deleteClient(id);
+    return {};
   });
 }
 

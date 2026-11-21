@@ -44,6 +44,14 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/
 Returns `201` with the invoice (including `id`, `number`, `subtotal_cents`, `tax_cents`, `total_cents`).
 Optional `number` overrides the auto number; duplicates return `409`.
 
+For a client who is already saved, pass `client_id` instead of typing the details: the saved client fills every
+`bill_to` field you leave out (anything you do pass wins).
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" "$BASE/api/v1/invoices" \
+  -d '{"client_id":"<id from GET /api/v1/clients>","items":[{"description":"SEO retainer","quantity":1,"unit_price_cents":50000}]}'
+```
+
 ## Get / update (drafts only)
 
 ```bash
@@ -123,3 +131,20 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/invoices/$ID/preview" > 
 ```
 
 (The logo in the preview points at `/api/logo`; the sent email embeds it inline.)
+
+## Clients
+
+Saving an invoice (create or update, UI or API) saves its Bill to details as a client, matched by name (case and
+spacing ignored): each non-empty field replaces the saved one. So "Alex Chen" and "Northwind Legal" are two clients even with
+the same email. Deleting a client does not touch its invoices, and saving another invoice with that name saves it again.
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/clients"            # list, with invoice_count and last_invoiced
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/clients/$CID"
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" "$BASE/api/v1/clients" \
+  -d '{"name":"Alex Chen","company":"Northwind Legal","email":"accounts@northwind-legal.example","cc":[],"address":"Suite 100, 123 Main Street\nSpringfield, Ontario A1A 1A1\nCanada"}'
+curl -s -X PATCH -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" "$BASE/api/v1/clients/$CID" -d '{"email":"new@example.com"}'
+curl -s -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE/api/v1/clients/$CID"
+```
+
+PATCH changes only the fields given (an empty string clears one). A second client with the same name returns `409`.

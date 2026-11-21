@@ -52,6 +52,17 @@ function open(): Database.Database {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS invoices_status ON invoices(status);
+    CREATE TABLE IF NOT EXISTS clients (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      name_key TEXT NOT NULL UNIQUE,
+      company TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      cc TEXT NOT NULL DEFAULT '[]',
+      address TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   // Columns added after the first release.
   const cols = new Set((db.prepare("PRAGMA table_info(invoices)").all() as { name: string }[]).map((c) => c.name));

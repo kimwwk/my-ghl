@@ -33,6 +33,9 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 ## Behaviour
 
 - Drafts are editable. Sent invoices are locked: to change one, Void and Duplicate.
+- Clients: saving an invoice saves its Bill to details to the Clients list (matched by name, newest non-empty details
+  win). A new invoice picks a saved client under Bill to; the Clients page adds, edits and deletes them. The first
+  start builds the list from existing invoices.
 - Send creates a single-use Stripe Payment Link (when card is on), emails via Gmail `users.messages.send`, logs the send, sets status `sent`.
 - Void deactivates the Payment Link. Marking paid by another method also deactivates it.
 - `overdue` is derived (sent and past due), not stored. So are `refunded` and `part_refunded` (paid, with a refund recorded).
@@ -44,7 +47,7 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 
 ## Layout
 
-- `app/` pages (`/`, `/invoices/new`, `/invoices/[id]`, `/settings`), `app/actions.ts` server actions, `app/api/` routes
-- `lib/` db, settings, invoices (validation + CRUD), service (send / paid / void / sync), email-html (pure renderer, shared with the live preview), email (MIME + transport), google (OAuth + Gmail), stripe
+- `app/` pages (`/`, `/invoices/new`, `/invoices/[id]`, `/clients`, `/clients/[id]`, `/settings`), `app/actions.ts` server actions, `app/api/` routes
+- `lib/` db, settings, invoices (validation + CRUD), clients (saved Bill to details), service (send / paid / void / sync), email-html (pure renderer, shared with the live preview), email (MIME + transport), google (OAuth + Gmail), stripe
 - `components/` editor, settings form, shell, `ui/` shadcn components
 - `docs/screenshots/` UI and email screenshots
