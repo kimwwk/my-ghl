@@ -49,9 +49,11 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
   const link = (href: string, label: string, style: string) =>
     `<a href="${esc(href)}" target="_blank" style="${style}text-decoration:none;">${esc(label)}</a>`;
   const nowrap = (inner: string) => `<span style="white-space:nowrap;">${inner}</span>`;
-  // Gmail's apps turn anything that looks like a street address into a Google Maps link. An
-  // invisible zero-width non-joiner before each space breaks its pattern; the text looks the same.
-  const noMap = (s: string) => esc(s).replace(/ /g, "&zwnj; ");
+  // Gmail turns anything that looks like a street address into a Google Maps link, but leaves
+  // text that is already inside a link alone. So plain lines go inside an <a> with no href: it looks
+  // like the text around it and isn't clickable. (Tested in Kim's Gmail 2026-11-21; zero-width
+  // characters did not stop it.)
+  const noMap = (s: string, color = MUTED) => `<a style="color:${color};text-decoration:none;">${esc(s)}</a>`;
 
   const row = (inner: string, pad = "10px 20px") =>
     `<tr><td align="left" style="padding:${pad};word-break:break-word;">${inner}</td></tr>`;
