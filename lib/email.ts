@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import MailComposer from "nodemailer/lib/mail-composer";
+import sharp from "sharp";
 import { DATA_DIR } from "./db";
 import { emailMode, getSettings } from "./settings";
 import { gmailSend, googleConnected } from "./google";
@@ -23,6 +24,25 @@ export function logoFile(): { buf: Buffer; contentType: string; filename: string
   };
 }
 
+/**
+ * The logo as sent in emails: 96px tall (twice the 48px it is shown at) and flattened onto
+ * white. The wordmark is black on transparent, so a mail app in dark mode would otherwise
+ * draw it black on a dark background, where it disappears. The PDF keeps the original.
+ */
+export async function emailLogo(): Promise<{ buf: Buffer; contentType: string; filename: string }> {
+  const l = logoFile();
+  try {
+    const buf = await sharp(l.buf, { density: 288 })
+      .flatten({ background: "#ffffff" })
+      .resize({ height: 96 })
+      .png()
+      .toBuffer();
+    return { buf, contentType: "image/png", filename: "logo.png" };
+  } catch {
+    return l;
+  }
+}
+
 export interface OutgoingMail {
   to: string[];
   cc: string[];
@@ -41,7 +61,7 @@ export function transportReady(): { ok: boolean; reason?: string } {
 }
 
 export async function buildMime(mail: OutgoingMail, from: string, replyTo?: string): Promise<Buffer> {
-  const logo = logoFile();
+  const logo = await emailLogo();
   const composer = new MailComposer({
     from,
     to: mail.to,

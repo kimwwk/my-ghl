@@ -44,13 +44,19 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
   const showPay = inv.payment.card && inv.status !== "paid" && inv.status !== "void";
   const payHref = payUrl ? esc(payUrl) : "#";
 
+  // Gmail turns bare addresses and URLs into its own blue links, so we link them ourselves
+  // in the colour of the text around them. Numbers and dates never break across lines.
+  const link = (href: string, label: string, style: string) =>
+    `<a href="${esc(href)}" target="_blank" style="${style}text-decoration:none;">${esc(label)}</a>`;
+  const nowrap = (inner: string) => `<span style="white-space:nowrap;">${inner}</span>`;
+
   const row = (inner: string, pad = "10px 20px") =>
     `<tr><td align="left" style="padding:${pad};word-break:break-word;">${inner}</td></tr>`;
   const txt = (inner: string) =>
     `<div style="font-family:${FONT};font-size:14px;line-height:1.5;color:#000000;">${inner}</div>`;
   const p = (inner: string) => `<p style="margin:0 0 13px 0;line-height:1.5;">${inner}</p>`;
 
-  // ---------- part 1: notification ----------
+  // ---------- part 1: the letter (GHL's notification email) ----------
   const logoImg = `<img src="${esc(logoSrc)}" alt="${esc(b.display_name)}" height="48" style="display:block;border:0;height:48px;width:auto;max-height:48px;max-width:180px;">`;
   const intro = [
     row(logoImg),
@@ -59,7 +65,7 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
       txt(
         p(`Hi ${esc(first)},`) +
           p(
-            `${esc(b.display_name)} sent you invoice ${esc(inv.number)} for ${esc(amountDue)} that&rsquo;s due on ${esc(formatLongDate(inv.due_date))}`,
+            `${esc(b.display_name)} sent you invoice ${nowrap(esc(inv.number))} for ${nowrap(esc(amountDue))} that&rsquo;s due on ${nowrap(esc(formatLongDate(inv.due_date)))}.`,
           ) +
           (inv.message.trim() ? p(nl(inv.message)) : ""),
       ),
@@ -89,11 +95,22 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
     ),
   );
 
-  // ---------- part 2: invoice document ----------
+  // ---------- part 2: the invoice document, on its own panel ----------
   const label = (t: string) =>
-    `<div style="font-family:${FONT};font-size:13px;font-weight:500;line-height:20px;color:${INK};">${esc(t)}</div>`;
-  const value = (t: string) =>
-    `<div style="font-family:${FONT};font-size:13px;line-height:20px;color:${MUTED};">${t}</div>`;
+    `<div style="font-family:${FONT};font-size:13px;font-weight:500;line-height:20px;color:${INK};white-space:nowrap;">${esc(t)}</div>`;
+  const value = (t: string, extra = "") =>
+    `<div style="font-family:${FONT};font-size:13px;line-height:20px;color:${MUTED};${extra}">${t}</div>`;
+  const muted = `color:${MUTED};`;
+
+  const bizLine = (l: string) => {
+    if (b.website && l === b.website) return link(/^https?:\/\//i.test(l) ? l : `https://${l}`, l, muted);
+    if (b.email && l === b.email) return link(`mailto:${l}`, l, muted);
+    if (b.phone && l === b.phone) {
+      const digits = l.replace(/[^\d+]/g, "");
+      return digits ? link(`tel:${digits}`, l, muted) : esc(l);
+    }
+    return esc(l);
+  };
 
   const titleBlock = `<tr><td align="right" style="padding:0;border-bottom:1px solid #000000;font-family:${FONT};font-size:34px;line-height:44px;font-weight:500;color:#000000;">INVOICE</td></tr>`;
 
@@ -102,29 +119,48 @@ export function renderInvoiceEmail(input: RenderInput): { html: string; text: st
 <td valign="top" align="left"><img src="${esc(logoSrc)}" alt="" height="48" style="display:block;border:0;height:48px;width:auto;max-height:48px;max-width:180px;"></td>
 <td valign="top" align="right" style="font-family:${FONT};">
 <div style="font-size:17px;line-height:24px;color:#000000;">${esc(v.business.name)}</div>
-${v.business.lines.map((l) => `<div style="font-size:12px;line-height:19px;color:${MUTED};">${esc(l)}</div>`).join("")}
+${v.business.lines.map((l) => `<div style="font-size:12px;line-height:19px;color:${MUTED};">${bizLine(l)}</div>`).join("")}
 </td></tr></table></td></tr>`;
 
-  const meta = `<tr><td style="padding:18px 0 22px 0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-<td valign="top" width="42%" style="padding-right:8px;">${label("Billed to")}${v.billedTo.map((l) => value(esc(l))).join("")}</td>
-<td valign="top" width="24%" style="padding-right:8px;padding-top:2px;">${label("Invoice No")}${value(esc(v.number))}</td>
-<td valign="top" width="34%" style="padding-top:2px;">${label("Issue Date")}${value(esc(v.issueDate))}<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>${label("Due Date")}${value(esc(v.dueDate))}</td>
-</tr></table></td></tr>`;
+  // Billed to / Invoice No / Dates: three columns on a wide screen. On a phone they wrap
+  // (Billed to on top, Invoice No and the dates side by side) instead of squeezing.
+  // The [if mso] tables give Outlook for Windows, which ignores inline-block, real columns.
+  const col = (w: number, inner: string) =>
+    `<!--[if mso]><td valign="top" width="${w}"><![endif]--><div style="display:inline-block;vertical-align:top;width:100%;max-width:${w}px;"><div style="padding:0 12px 14px 0;">${inner}</div></div><!--[if mso]></td><![endif]-->`;
+  const billedTo = v.billedTo
+    .map((l) => value(inv.bill_to.email && l === inv.bill_to.email ? link(`mailto:${l}`, l, muted) : esc(l), "word-break:break-word;"))
+    .join("");
+  const meta = `<tr><td style="padding:18px 0 8px 0;font-size:0;line-height:0;">
+<!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><![endif]-->${col(240, label("Billed to") + billedTo)}${col(110, label("Invoice No") + value(esc(v.number), "white-space:nowrap;"))}${col(
+    170,
+    label("Issue Date") +
+      value(esc(v.issueDate), "white-space:nowrap;") +
+      `<div style="height:12px;line-height:12px;font-size:0;">&nbsp;</div>` +
+      label("Due Date") +
+      value(esc(v.dueDate), "white-space:nowrap;"),
+  )}<!--[if mso]></tr></table><![endif]-->
+</td></tr>`;
 
   const th = (t: string, align: string, w = "") =>
     `<td ${w} align="${align}" style="padding:10px 0;border-bottom:2px solid ${accent};font-family:${FONT};font-size:11px;font-weight:500;letter-spacing:0.4px;text-transform:uppercase;color:#000000;">${t}</td>`;
   const td = (inner: string, align: string, extra = "") =>
     `<td align="${align}" valign="top" style="padding:9px 0;font-family:${FONT};font-size:12px;line-height:19px;color:${INK};${extra}">${inner}</td>`;
+  // The description gets its own row spanning the table, so on a phone it uses the full width
+  // instead of a narrow name column; the inner max-width keeps it under the name on desktop.
   const items = v.rows
-    .map(
-      (r) => `<tr>
-${td(`${esc(r.name)}${r.description ? `<div style="color:${MUTED};">${nl(r.description)}</div>` : ""}`, "left", "padding-right:8px;")}
-${td(esc(r.price), "right", "white-space:nowrap;padding-left:8px;")}
-${td(esc(r.qty), "center", "width:36px;")}
-${td(esc(r.tax), "center", "width:44px;")}
-${td(esc(r.subtotal), "right", "white-space:nowrap;padding-left:8px;")}</tr>`,
-    )
+    .map((r) => {
+      const tight = r.description ? "padding-bottom:2px;" : "";
+      const main = `<tr>
+${td(esc(r.name), "left", `padding-right:8px;${tight}`)}
+${td(esc(r.price), "right", `white-space:nowrap;padding-left:8px;${tight}`)}
+${td(esc(r.qty), "center", `width:36px;${tight}`)}
+${td(esc(r.tax), "center", `width:44px;${tight}`)}
+${td(esc(r.subtotal), "right", `white-space:nowrap;padding-left:8px;${tight}`)}</tr>`;
+      const desc = r.description
+        ? `<tr><td colspan="5" style="padding:0 0 9px 0;font-family:${FONT};font-size:12px;line-height:19px;color:${MUTED};"><div style="max-width:380px;">${nl(r.description)}</div></td></tr>`
+        : "";
+      return main + desc;
+    })
     .join("");
   const itemsTable = `<tr><td>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
@@ -142,11 +178,14 @@ ${items}
       const val = t.strong
         ? `font-size:13px;font-weight:700;color:#000000;padding-top:12px;`
         : `font-size:12px;color:${MUTED};padding-top:7px;`;
-      return `<tr><td style="${top}${lab}padding-bottom:6px;padding-left:12px;font-family:${FONT};">${esc(t.label)}</td><td align="right" style="${top}${val}padding-bottom:6px;font-family:${FONT};white-space:nowrap;">${esc(t.value)}</td></tr>`;
+      return `<tr><td style="${top}${lab}padding-bottom:6px;padding-left:12px;padding-right:12px;font-family:${FONT};white-space:nowrap;">${esc(t.label)}</td><td align="right" style="${top}${val}padding-bottom:6px;font-family:${FONT};white-space:nowrap;">${esc(t.value)}</td></tr>`;
     })
     .join("");
+  // Up to 300px wide on the right; on a phone it takes the full width rather than wrapping labels.
   const totals = `<tr><td align="right" style="padding-top:6px;">
-<table role="presentation" width="56%" align="right" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">${totalRows}</table></td></tr>`;
+<!--[if mso]><table role="presentation" align="right" width="300" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" align="right" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:300px;border-collapse:collapse;">${totalRows}</table>
+<!--[if mso]></td></tr></table><![endif]--></td></tr>`;
 
   let stamp = "";
   if (v.stamp) {
@@ -155,30 +194,46 @@ ${items}
 <div style="font-size:18px;line-height:26px;color:#000000;">${v.stamp.title}</div>${v.stamp.sub ? `<div style="font-size:12px;line-height:20px;color:${MUTED};">${esc(v.stamp.sub)}</div>` : ""}</td></tr></table></td></tr>`;
   }
 
+  // The e-Transfer address is what the client copies, so it is bold, linked in the text colour
+  // and kept on one line; the invoice number is kept on one line too.
+  const termHtml = (t: string) => {
+    let h = nl(t);
+    if (b.etransfer_email)
+      h = h.split(esc(b.etransfer_email)).join(nowrap(link(`mailto:${b.etransfer_email}`, b.etransfer_email, "color:#000000;font-weight:700;")));
+    return h.split(esc(inv.number)).join(nowrap(esc(inv.number)));
+  };
   const terms = v.terms.length
     ? `<tr><td style="padding-top:26px;font-family:${FONT};">
 <div style="font-size:13px;font-weight:700;line-height:20px;color:${INK};padding-bottom:6px;">Terms &amp; Notes:</div>
-${v.terms.map((t) => `<p style="margin:0 0 12px 0;font-size:13px;line-height:1.7;color:#000000;">${nl(t)}</p>`).join("")}
+${v.terms.map((t) => `<p style="margin:0 0 12px 0;font-size:13px;line-height:1.7;color:#000000;">${termHtml(t)}</p>`).join("")}
 </td></tr>`
     : "";
 
   const doc = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 ${titleBlock}${bizBlock}${meta}${itemsTable}${totals}${stamp}${terms}
-<tr><td style="padding-top:14px;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">This invoice is also attached to this email as ${esc(inv.number)}.pdf.</td></tr>
+<tr><td style="padding-top:14px;font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED};">This invoice is also attached to this email as ${nowrap(`${esc(inv.number)}.pdf`)}.</td></tr>
 </table>`;
 
+  // Two white panels on the light-blue background: the letter, then the invoice. The gap
+  // between them shows where the letter ends, so "Regards" no longer runs into the invoice.
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light only">
 <title>${esc(emailSubject(inv, b))}</title>
 <!--[if !mso]><!--><link href="https://fonts.googleapis.com/css?family=Ubuntu:300,400,500,700&display=swap" rel="stylesheet" type="text/css"><style type="text/css">@import url(https://fonts.googleapis.com/css?family=Ubuntu:300,400,500,700&display=swap);</style><!--<![endif]-->
 </head>
 <body style="margin:0;padding:0;word-spacing:normal;background:#EAF0F6;">
-<div style="background:#EAF0F6;padding:0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EAF0F6;"><tr><td align="center" style="padding:0;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;">
+<div style="background:#EAF0F6;padding:0 0 24px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#EAF0F6" style="background:#EAF0F6;"><tr><td align="center" style="padding:0;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:10px 0 14px 0;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 ${intro.join("\n")}
-<tr><td style="padding:34px 20px 30px 20px;">${doc}</td></tr>
+</table></td></tr>
+<tr><td style="height:16px;line-height:16px;font-size:0;">&nbsp;</td></tr>
+<tr><td bgcolor="#ffffff" style="background:#ffffff;padding:30px 20px;">${doc}</td></tr>
 </table>
+<!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
 </div>
 </body></html>`;
@@ -186,7 +241,7 @@ ${intro.join("\n")}
   // ---------- plain text ----------
   const t: string[] = [];
   t.push(`Invoice for ${first}`, "", `Hi ${first},`, "");
-  t.push(`${b.display_name} sent you invoice ${inv.number} for ${amountDue} that's due on ${formatLongDate(inv.due_date)}`, "");
+  t.push(`${b.display_name} sent you invoice ${inv.number} for ${amountDue} that's due on ${formatLongDate(inv.due_date)}.`, "");
   if (inv.message.trim()) t.push(inv.message.trim(), "");
   if (showPay) t.push(`Pay invoice: ${payUrl ?? "(link created when sent)"}`, "");
   t.push("Regards,", b.sender_name || b.display_name, b.display_name, "");
