@@ -248,7 +248,7 @@ export function SettingsForm({
             </div>
           )}
 
-          <Field label="OAuth redirect URI (add this in Google Cloud Console)">
+          <Field label="OAuth redirect URI (only for a Web application client; a Desktop app client needs nothing)">
             <div className="flex gap-2">
               <Input readOnly value={google.redirectUri} className="font-mono" />
               <Button variant="outline" size="icon" aria-label="Copy redirect URI" onClick={() => copy(google.redirectUri)}><Copy /></Button>
@@ -267,7 +267,11 @@ export function SettingsForm({
               <ol className="list-decimal space-y-1.5 pt-3 pl-5 text-muted-foreground">
                 <li>In Google Cloud Console, create or pick a project and enable the <b>Gmail API</b>.</li>
                 <li>Configure the OAuth consent screen and add the scope <span className="font-mono">gmail.send</span>.</li>
-                <li>Create an <b>OAuth client ID</b> of type &ldquo;Web application&rdquo; and add the redirect URI shown above.</li>
+                <li>
+                  Create an <b>OAuth client ID</b> of type &ldquo;Desktop app&rdquo; (nothing else to set up). A
+                  &ldquo;Web application&rdquo; client also works if you add the redirect URI shown above.
+                </li>
+                <li>If the consent screen is External and in Testing, add the Google account you will send from as a <b>Test user</b>.</li>
                 <li>Paste the client ID and secret here, press Save, then Connect Google.</li>
                 <li>
                   A consent screen left in <b>Testing</b> issues refresh tokens that expire after 7 days. Publish it to

@@ -1,10 +1,19 @@
-// Minimal Google OAuth 2.0 (web client) + Gmail send, using plain fetch.
+// Minimal Google OAuth 2.0 + Gmail send, using plain fetch.
+// Works with a "Desktop app" client (Google accepts any loopback redirect, so nothing to register)
+// or a "Web application" client with the redirect URI from Settings. PKCE (S256) is always used.
+import { createHash, randomBytes } from "node:crypto";
 import { appUrl, getSettings, googleCreds, saveSettings } from "./settings";
 
 export const GOOGLE_SCOPES = "openid email https://www.googleapis.com/auth/gmail.send";
 export const redirectUri = () => `${appUrl()}/api/google/callback`;
 
-export function buildAuthUrl(state: string): string {
+export function newPkce(): { verifier: string; challenge: string } {
+  const verifier = randomBytes(48).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  return { verifier, challenge };
+}
+
+export function buildAuthUrl(state: string, codeChallenge: string): string {
   const { clientId } = googleCreds();
   if (!clientId) throw new Error("Google client ID is not set. Save it in Settings first.");
   const p = new URLSearchParams({
@@ -15,6 +24,8 @@ export function buildAuthUrl(state: string): string {
     access_type: "offline",
     prompt: "consent",
     state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${p}`;
 }
@@ -39,7 +50,7 @@ async function tokenRequest(body: Record<string, string>): Promise<TokenResponse
   const json = (await res.json().catch(() => ({}))) as TokenResponse;
   if (!res.ok || json.error) {
     const detail = json.error_description || json.error || `HTTP ${res.status}`;
-    if (json.error === "invalid_grant")
+    if (json.error === "invalid_grant" && body.grant_type === "refresh_token")
       throw new Error(
         "Google rejected the stored refresh token (invalid_grant). It was revoked or expired (consent screens left in 'Testing' expire after 7 days). Reconnect Google in Settings.",
       );
@@ -58,10 +69,11 @@ function emailFromIdToken(idToken?: string): string {
   }
 }
 
-export async function completeConnect(code: string): Promise<string> {
+export async function completeConnect(code: string, codeVerifier: string): Promise<string> {
   const t = await tokenRequest({
     grant_type: "authorization_code",
     code,
+    code_verifier: codeVerifier,
     redirect_uri: redirectUri(),
   });
   if (!t.refresh_token)

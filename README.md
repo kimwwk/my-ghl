@@ -25,8 +25,9 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 1. **Business profile**: names, address, email, phone, tax number, logo, invoice prefix and next number, defaults.
 2. **e-Transfer**: recipient email and instruction text (`{email}` and `{invoice}` are filled in).
 3. **Stripe** (optional): paste a secret key, press Test connection. Without a key the card option is hidden.
-4. **Email (Gmail)**: create a Google Cloud OAuth client (type Web application), enable the Gmail API, add the redirect URI
-   `http://localhost:8796/api/google/callback`, paste client ID and secret, press Connect Google.
+4. **Email (Gmail)**: enable the Gmail API, create a Google Cloud OAuth client of type **Desktop app** (nothing else to
+   register; Google accepts any loopback redirect), paste client ID and secret, press Connect Google. A Web application
+   client also works if you add the redirect URI `http://localhost:8796/api/google/callback`. PKCE is always used.
    A consent screen left in "Testing" issues refresh tokens that expire after 7 days: publish it to "In production" or use an Internal Workspace app.
 
 ## Behaviour
