@@ -92,6 +92,8 @@ export interface BusinessProfile {
   etransfer_text: string;
   website: string;
   sender_name: string;
+  /** subject template: {business} and {invoice} are filled in */
+  email_subject: string;
   accent_color: string;
 }
 

@@ -129,6 +129,7 @@ export async function saveSettingsAction(v: SettingsInput) {
       etransfer_text: v.etransfer_text,
       website: v.website.trim(),
       sender_name: v.sender_name.trim(),
+      email_subject: v.email_subject.trim() || "[{business}] Invoice received",
       accent_color: /^#[0-9a-fA-F]{6}$/.test(v.accent_color.trim()) ? v.accent_color.trim() : "#0a6e48",
       google_client_id: v.google_client_id.trim(),
     };

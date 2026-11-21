@@ -18,8 +18,10 @@ export function esc(s: string): string {
 }
 const nl = (s: string) => esc(s).replace(/\r?\n/g, "<br>");
 
-export function emailSubject(inv: { number: string }, b: Pick<BusinessProfile, "display_name">) {
-  return `[${b.display_name || "Invoice"}] Invoice ${inv.number}`;
+/** Subject from the Settings template (default "[{business}] Invoice received", as GoHighLevel sends). */
+export function emailSubject(inv: { number: string }, b: Pick<BusinessProfile, "display_name" | "email_subject">) {
+  const tpl = b.email_subject?.trim() || "[{business}] Invoice received";
+  return tpl.replace(/\{business\}/gi, b.display_name || "Invoice").replace(/\{invoice\}/gi, inv.number);
 }
 
 export interface RenderInput {

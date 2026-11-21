@@ -32,6 +32,7 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 
 ## Behaviour
 
+- The email subject comes from Settings > Email subject (default `[{business}] Invoice received`, as GoHighLevel sent it; `{invoice}` adds the number).
 - Drafts are editable. Sent invoices are locked: to change one, Void and Duplicate.
 - Clients: saving an invoice saves its Bill to details to the Clients list (matched by name, newest non-empty details
   win). A new invoice picks a saved client under Bill to; the Clients page adds, edits and deletes them. The first

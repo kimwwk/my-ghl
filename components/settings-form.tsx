@@ -109,6 +109,7 @@ export function SettingsForm({
             <Field label="Tax / HST number (optional)"><Input value={v.tax_number} onChange={(e) => set("tax_number", e.target.value)} /></Field>
             <Field label="Website (optional)"><Input value={v.website} onChange={(e) => set("website", e.target.value)} /></Field>
             <Field label="Email sender name" hint="Signs the invoice email: Regards, <name>."><Input value={v.sender_name} onChange={(e) => set("sender_name", e.target.value)} /></Field>
+            <Field label="Email subject" hint="Subject of every invoice email. {invoice} adds the invoice number; {business} adds the display name."><Input value={v.email_subject} onChange={(e) => set("email_subject", e.target.value)} /></Field>
             <Field label="Accent colour" hint="Pay button and the line-items header rule.">
               <div className="flex gap-2">
                 <input type="color" aria-label="Accent colour" value={/^#[0-9a-fA-F]{6}$/.test(v.accent_color) ? v.accent_color : "#0a6e48"} onChange={(e) => set("accent_color", e.target.value)} className="h-8 w-10 border border-input bg-transparent p-0.5" />

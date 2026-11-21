@@ -35,6 +35,7 @@ export default async function SettingsPage({
         etransfer_text: s.etransfer_text,
         website: s.website,
         sender_name: s.sender_name,
+        email_subject: s.email_subject,
         accent_color: s.accent_color,
         google_client_id: g.clientId,
       }}
