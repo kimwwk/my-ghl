@@ -125,6 +125,13 @@ export function InvoiceEditor({
   const [paidDate, setPaidDate] = useState(todayISO());
   const [paidNote, setPaidNote] = useState("");
   const [overrideTo, setOverrideTo] = useState("");
+  // Why the last Save/Send did not go through. Stays on screen until fixed or dismissed (toasts were easy to miss).
+  const [problem, setProblem] = useState<{ title: string; items: string[] } | null>(null);
+  const [sending, setSending] = useState(false);
+  const showProblem = (title: string, items: string[]) => {
+    setProblem({ title, items });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const refundLeft = invoice ? invoice.total_cents - (invoice.refund?.cents ?? 0) : 0;
   const [showRefund, setShowRefund] = useState(false);
   const [refundAmount, setRefundAmount] = useState(centsToInput(refundLeft));
@@ -181,17 +188,31 @@ export function InvoiceEditor({
     };
   }
 
-  async function save(): Promise<string | null> {
+  async function save(failTitle = "Not saved"): Promise<string | null> {
     if (rowErr) {
-      toast.error("A unit price is not a valid amount.");
+      showProblem(failTitle, ["A unit price is not a valid amount."]);
       return null;
     }
     const r = await saveInvoiceAction(invoice?.id ?? null, buildInput());
     if (!r.ok) {
-      toast.error(r.error);
+      showProblem(failTitle, [r.error]);
       return null;
     }
     return r.id;
+  }
+
+  /** The same checks the server runs before sending, listed all at once so nothing fails silently. */
+  function sendProblems(): string[] {
+    const out: string[] = [];
+    if (sendBlock) out.push(sendBlock);
+    if (!(overrideTo.trim() || email.trim())) out.push("Add the client's email address.");
+    if (!name.trim()) out.push("Add the client name.");
+    if (!items.some((i) => i.description.trim())) out.push("Add at least one line item with a name.");
+    else if (totals.total_cents <= 0) out.push("The total must be more than $0.00.");
+    if (!payEt && !payCard) out.push("Tick at least one payment option (Interac e-Transfer or card) under Payment options.");
+    if (payEt && !business.etransfer_email && !business.etransfer_text)
+      out.push("e-Transfer is ticked but no e-Transfer details are set in Settings.");
+    return out;
   }
 
   const onSave = () =>
@@ -206,19 +227,27 @@ export function InvoiceEditor({
   const onSend = (resend = false) =>
     start(async () => {
       const target = overrideTo.trim() || email.trim();
+      const blockers = locked ? (sendBlock ? [sendBlock] : []) : sendProblems();
+      if (blockers.length) {
+        showProblem(resend ? "Not resent" : "Not sent", blockers);
+        return;
+      }
       if (!window.confirm(`${resend ? "Resend" : "Send"} ${number} (${formatMoney(totals.total_cents, currency)}) to ${target || "(no email)"}?`)) return;
       let id = invoice?.id ?? null;
       if (!locked) {
-        id = await save();
+        id = await save("Not sent");
         if (!id) return;
       }
+      setSending(true);
       const r = await sendInvoiceAction(id!, overrideTo.trim() || undefined);
+      setSending(false);
       if (!r.ok) {
-        toast.error(r.error);
+        showProblem("Not sent", [r.error]);
         if (!invoice) router.replace(`/invoices/${id}`);
         else router.refresh();
         return;
       }
+      setProblem(null);
       toast.success(`Sent to ${r.to}`);
       router.replace(`/invoices/${id}`);
       router.refresh();
@@ -308,7 +337,7 @@ export function InvoiceEditor({
                 Save draft
               </Button>
               <Button onClick={() => onSend(false)} disabled={pending || !!sendBlock} title={sendBlock ?? undefined}>
-                Send
+                {sending ? "Sending…" : "Send"}
               </Button>
             </>
           )}
@@ -365,6 +394,25 @@ export function InvoiceEditor({
         </div>
       </div>
 
+      {problem && (
+        <div role="alert" className="mt-3 flex items-start justify-between gap-4 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <div>
+            <p className="font-semibold">{problem.title}</p>
+            {problem.items.length === 1 ? (
+              <p>{problem.items[0]}</p>
+            ) : (
+              <ul className="list-disc pl-5">
+                {problem.items.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button type="button" className="shrink-0 underline-offset-4 hover:underline" onClick={() => setProblem(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
       {!locked && sendBlock && (
         <p className="mt-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
           Send is disabled: {sendBlock}
@@ -561,6 +609,11 @@ export function InvoiceEditor({
               </label>
             ) : (
               <p className="text-sm text-caption">Card payments are hidden: no Stripe key is configured (Settings &gt; Stripe).</p>
+            )}
+            {!payEt && !payCard && (
+              <p className="border-l-2 border-destructive bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                Tick at least one payment option. The invoice can&rsquo;t be sent without one.
+              </p>
             )}
           </Section>
 
