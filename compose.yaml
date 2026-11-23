@@ -1,6 +1,6 @@
 services:
   invoices:
-    image: ghcr.io/kimwwk/kivov-invoices:latest
+    image: ghcr.io/kimwwk/my-ghl:latest
     build: .
     restart: unless-stopped
     env_file: .env

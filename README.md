@@ -22,11 +22,11 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 
 ## Run with Docker (24/7 on a server)
 
-Every push to `master` builds `ghcr.io/kimwwk/kivov-invoices:latest` (GitHub Actions, `.github/workflows/docker.yml`).
+Every push to `master` builds `ghcr.io/kimwwk/my-ghl:latest` (GitHub Actions, `.github/workflows/docker.yml`).
 On the server:
 
 ```bash
-git clone https://github.com/kimwwk/kivov-invoices.git /opt/kivov-invoices && cd /opt/kivov-invoices
+git clone https://github.com/kimwwk/my-ghl.git /opt/my-ghl && cd /opt/my-ghl
 cp .env.example .env            # set INVOICE_API_TOKEN etc.
 mkdir -p data && chown 1000:1000 data   # the container runs as uid 1000 (node)
 docker compose pull && docker compose up -d
