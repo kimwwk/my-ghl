@@ -1,0 +1,14 @@
+services:
+  invoices:
+    image: ghcr.io/kimwwk/kivov-invoices:latest
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    # Only reachable from the host itself (no login on the web UI).
+    # Open it with: ssh -L 8796:127.0.0.1:8796 <host>  ->  http://localhost:8796
+    ports:
+      - "127.0.0.1:8796:8796"
