@@ -36,7 +36,7 @@ brings it back after a crash or reboot. Port 8796 is open to the network and the
 trusted LAN. Google OAuth only redirects to `localhost`: to (re)connect Gmail, open the app once through
 `ssh -L 8796:127.0.0.1:8796 <server>` at `http://localhost:8796`.
 
-Update: `git pull && docker compose up -d --build && docker image prune -f`.
+Update: `git pull && docker compose up -d --build && docker image prune -f && docker builder prune -af` (the prunes keep a small disk from filling up).
 
 ## Setup in the UI (Settings)
 
