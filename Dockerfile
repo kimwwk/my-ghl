@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # 1. Install dependencies and build the standalone server
-#    (better-sqlite3 ships prebuilt Linux binaries, so no compiler is needed)
+#    --ignore-scripts: better-sqlite3 ships prebuilt binaries (prebuilds/linux-x64.node), but npm
+#    would still run an implicit node-gyp rebuild for it. No other dependency has an install script.
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund && npm cache clean --force
+RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
 COPY . .
 RUN npm run build
 
