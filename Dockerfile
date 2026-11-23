@@ -1,22 +1,16 @@
 # syntax=docker/dockerfile:1
 
-# 1. Install dependencies (better-sqlite3 is native: keep a compiler in case no prebuilt binary matches)
-FROM node:24-bookworm-slim AS deps
-WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
-
-# 2. Build the standalone server
+# 1. Install dependencies and build the standalone server
+#    (better-sqlite3 ships prebuilt Linux binaries, so no compiler is needed)
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund && npm cache clean --force
 COPY . .
 RUN npm run build
 
-# 3. Runtime: only the traced files, no dev dependencies
+# 2. Runtime: only the traced files, no dev dependencies
 FROM node:24-bookworm-slim AS run
 WORKDIR /app
 ENV NODE_ENV=production \

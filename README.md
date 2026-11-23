@@ -22,20 +22,21 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 
 ## Run with Docker (24/7 on a server)
 
-Every push to `master` builds `ghcr.io/kimwwk/my-ghl:latest` (GitHub Actions, `.github/workflows/docker.yml`).
-On the server:
+The server builds the image itself from this repo (no registry):
 
 ```bash
 git clone https://github.com/kimwwk/my-ghl.git /opt/my-ghl && cd /opt/my-ghl
 cp .env.example .env            # set INVOICE_API_TOKEN etc.
 mkdir -p data && chown 1000:1000 data   # the container runs as uid 1000 (node)
-docker compose pull && docker compose up -d
+docker compose up -d --build    # http://<server>:8796
 ```
 
-`data/` (the SQLite DB, imports, logo, outbox) is mounted at `/data` and survives updates. The web UI has no login, so
-`compose.yaml` publishes the port on `127.0.0.1` only: open it through an SSH tunnel,
-`ssh -L 8796:127.0.0.1:8796 <server>`, then `http://localhost:8796` (this also keeps the Google OAuth loopback redirect working).
-Update: `git pull && docker compose pull && docker compose up -d`. Build on the server instead: `docker compose up -d --build`.
+`data/` (the SQLite DB, imports, logo, outbox) is mounted at `/data` and survives rebuilds. `restart: unless-stopped`
+brings it back after a crash or reboot. Port 8796 is open to the network and the web UI has no login, so keep it on a
+trusted LAN. Google OAuth only redirects to `localhost`: to (re)connect Gmail, open the app once through
+`ssh -L 8796:127.0.0.1:8796 <server>` at `http://localhost:8796`.
+
+Update: `git pull && docker compose up -d --build && docker image prune -f`.
 
 ## Setup in the UI (Settings)
 
