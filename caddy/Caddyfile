@@ -1,0 +1,12 @@
+{
+	# Caddy runs in Docker and cannot add its root CA to any trust store.
+	# Each device imports caddy/data/caddy/pki/authorities/local/root.crt by hand (see README).
+	skip_install_trust
+}
+
+# SITE_ADDRESS (in .env) is the address people open, e.g. the server's LAN IP.
+# HTTP on port 80 redirects here automatically.
+{$SITE_ADDRESS} {
+	tls internal
+	reverse_proxy invoices:8796
+}

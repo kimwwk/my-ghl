@@ -9,6 +9,25 @@ services:
       DATA_DIR: /data
     volumes:
       - ./data:/data
-    # Open to the local network. The web UI has no login: anyone who can reach this port can use it.
+    # Only on the server's localhost: the network reaches the app through Caddy over HTTPS.
+    # The Gmail reconnect tunnel (ssh -L 8796:127.0.0.1:8796 <server>) uses this port.
     ports:
-      - "8796:8796"
+      - "127.0.0.1:8796:8796"
+
+  # HTTPS in front of the app, with a certificate from Caddy's own CA. Port 80 redirects to 443.
+  # The web UI has no login: anyone who can reach port 443 can use it.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - invoices
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env to the address you open, e.g. the server IP}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"

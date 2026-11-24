@@ -22,21 +22,28 @@ Set `EMAIL_TRANSPORT=file` to write full MIME messages to `data/outbox/<invoice>
 
 ## Run with Docker (24/7 on a server)
 
-The server builds the image itself from this repo (no registry):
+The server builds the image itself from this repo (no registry). Caddy runs beside the app and serves it over HTTPS:
 
 ```bash
 git clone https://github.com/kimwwk/my-ghl.git /opt/my-ghl && cd /opt/my-ghl
-cp .env.example .env            # set INVOICE_API_TOKEN etc.
+cp .env.example .env            # set INVOICE_API_TOKEN, and SITE_ADDRESS to the server's LAN IP
 mkdir -p data && chown 1000:1000 data   # the container runs as uid 1000 (node)
-docker compose up -d --build    # http://<server>:8796
+docker compose up -d --build    # https://<SITE_ADDRESS>
 ```
 
-`data/` (the SQLite DB, imports, logo, outbox) is mounted at `/data` and survives rebuilds. `restart: unless-stopped`
-brings it back after a crash or reboot. Port 8796 is open to the network and the web UI has no login, so keep it on a
-trusted LAN. Google OAuth only redirects to `localhost`: to (re)connect Gmail, open the app once through
-`ssh -L 8796:127.0.0.1:8796 <server>` at `http://localhost:8796`.
+- `data/` (the SQLite DB, imports, logo, outbox) is mounted at `/data` and survives rebuilds. `restart: unless-stopped`
+  brings both containers back after a crash or reboot.
+- HTTPS: Caddy listens on 443 (port 80 redirects to it) and issues the certificate from its own CA, so a browser warns
+  until the device trusts that CA's root. Copy `caddy/data/caddy/pki/authorities/local/root.crt` from the server and
+  import it (Windows: double-click > Install Certificate > Current User > Trusted Root Certification Authorities, then
+  restart the browser). The root lasts 10 years and Caddy renews the site certificate itself. `caddy/data/` also holds
+  the CA's private key: it is gitignored, and keep it off other machines.
+- The web UI has no login: anyone who can reach port 443 can use it, so keep it on a trusted LAN. If the server's IP
+  changes, set the new one in `SITE_ADDRESS` and run `docker compose up -d`.
+- Port 8796 is open only on the server's localhost. Google OAuth only redirects to `localhost`: to (re)connect Gmail,
+  open the app once through `ssh -L 8796:127.0.0.1:8796 <server>` at `http://localhost:8796`.
 
-Update: `git pull && docker compose up -d --build && docker image prune -f && docker builder prune -af` (the prunes keep a small disk from filling up).
+Update: `git pull && docker compose pull caddy && docker compose up -d --build && docker image prune -f && docker builder prune -af` (the prunes keep a small disk from filling up).
 
 ## Setup in the UI (Settings)
 

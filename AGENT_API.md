@@ -1,6 +1,6 @@
 # Agent REST API
 
-Base URL `http://localhost:8796`. Every request needs `Authorization: Bearer $INVOICE_API_TOKEN`
+Base URL `http://localhost:8796` (on the Docker server: `https://<SITE_ADDRESS>`, with `curl --cacert root.crt`, see README). Every request needs `Authorization: Bearer $INVOICE_API_TOKEN`
 (the value in `.env.local`). JSON in, JSON out. Errors are `{"error": "<message>"}` with a 4xx/5xx status.
 Money is integer cents. A line item's `description` is shown as the item name (first line) with any further lines underneath in grey. Dates are `YYYY-MM-DD`.
 

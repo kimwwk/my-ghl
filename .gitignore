@@ -45,3 +45,7 @@ next-env.d.ts
 !.env.example
 /docs/screenshots/
 /docs/ghl-reference/
+
+# Caddy state on the server: the local CA (root + private key) and certificates
+/caddy/data/
+/caddy/config/
