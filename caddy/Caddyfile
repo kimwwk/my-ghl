@@ -2,6 +2,9 @@
 	# Caddy runs in Docker and cannot add its root CA to any trust store.
 	# Each device imports caddy/data/caddy/pki/authorities/local/root.crt by hand (see README).
 	skip_install_trust
+	# Browsers send no server name (SNI) when the address is an IP. Inside Docker the connection
+	# arrives on the container's IP, so without this Caddy finds no certificate and the handshake fails.
+	default_sni {$SITE_ADDRESS}
 }
 
 # SITE_ADDRESS (in .env) is the address people open, e.g. the server's LAN IP.
